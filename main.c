@@ -62,7 +62,7 @@ SDL_Surface *surface_from_file(const char *filename)
     const int pitch = 4 * width;
 
     return scp(
-        SDL_CreateRGBSurfaceFrom((void *)pixels, width, height, depth, pitch, 
+        SDL_CreateRGBSurfaceFrom((void *) pixels, width, height, depth, pitch, 
                                  rmask, gmask, bmask, amask)
     );  
 }
@@ -80,6 +80,7 @@ Font font_load_from_file(SDL_Renderer *renderer, const char *filename)
     Font font = {0};
 
     SDL_Surface *font_surface = surface_from_file(filename);
+    scc(SDL_SetColorKey(font_surface, SDL_TRUE, 0xFF000000));
     font.spritesheet = scp(SDL_CreateTextureFromSurface(renderer, font_surface));
 
     SDL_FreeSurface(font_surface);
@@ -100,7 +101,7 @@ Font font_load_from_file(SDL_Renderer *renderer, const char *filename)
     return font;
 }
 
-void render_char(SDL_Renderer *renderer, Font *font, char c, Vec2f pos, float scale)
+void render_char(SDL_Renderer *renderer, const Font *font, char c, Vec2f pos, float scale)
 {
     assert(c >= ASCII_DISPLAY_LOW);
     assert(c <= ASCII_DISPLAY_HIGH);
@@ -116,17 +117,22 @@ void render_char(SDL_Renderer *renderer, Font *font, char c, Vec2f pos, float sc
     scc(SDL_RenderCopy(renderer, font->spritesheet, &font->glyph_table[index], &destine));
 }
 
-void render_text_sized(SDL_Renderer *renderer, Font *font, const char *text, 
-                       size_t text_size, Vec2f pos, Uint32 color, float scale)
+void set_texture_color(SDL_Texture *texture, Uint32 color)
 {
     scc(SDL_SetTextureColorMod(
-        font->spritesheet, 
+        texture, 
         (color >> (0 * 8)) & 0xff, 
         (color >> (1 * 8)) & 0xff,
         (color >> (2 * 8)) & 0xff
     ));
 
-    scc(SDL_SetTextureAlphaMod(font->spritesheet, (color >> (3 * 8)) & 0xff));
+    scc(SDL_SetTextureAlphaMod(texture, (color >> (3 * 8)) & 0xff));
+}
+
+void render_text_sized(SDL_Renderer *renderer, Font *font, const char *text, 
+                       size_t text_size, Vec2f pos, Uint32 color, float scale)
+{
+    set_texture_color(font->spritesheet, color);
 
     Vec2f pen = pos;
     for (size_t i = 0; i < text_size; i++) {
@@ -152,17 +158,24 @@ size_t buffer_size = 0;
     (color) >> (0 * 2) & 0xff, \
     (color) >> (0 * 3) & 0xff \
 
-void render_cursor(SDL_Renderer *renderer, Uint32 color)
+void render_cursor(SDL_Renderer *renderer, const Font *font)
 {
+    const Vec2f pos = vec2f(buffer_cursor * FONT_CHAR_WIDTH * FONT_SCALE, 0.0f);
     SDL_Rect rect = {
-        .x = (int) floorf(buffer_cursor * FONT_CHAR_WIDTH * FONT_SCALE),
-        .y = 0,
+        .x = (int) floorf(pos.x),
+        .y = (int) floorf(pos.y),
         .w = FONT_CHAR_WIDTH * FONT_SCALE,
         .h = FONT_CHAR_HEIGHT * FONT_SCALE,
     };
 
     scc(SDL_SetRenderDrawColor(renderer, UNHEX(0xFFFFFFFF)));
     scc(SDL_RenderFillRect(renderer, &rect));
+
+    set_texture_color(font->spritesheet, 0xFF000000);
+
+    if (buffer_cursor < buffer_size) {
+        render_char(renderer, font, buffer[buffer_cursor], pos, FONT_SCALE);
+    }
 }
 
 int main(void)
@@ -196,7 +209,19 @@ int main(void)
                                 buffer_size -= 1;
                                 buffer_cursor = buffer_size;
                             }
-                        }
+                        } break;
+
+                        case SDLK_LEFT: {
+                            if (buffer_cursor > 0) {
+                                buffer_cursor--;
+                            }
+                        } break;
+
+                        case SDLK_RIGHT: {
+                            if (buffer_cursor < buffer_size) {
+                                buffer_cursor++;
+                            }
+                        } break;
                     }
                 } break;
 
@@ -219,7 +244,7 @@ int main(void)
         scc(SDL_RenderClear(renderer));
 
         render_text_sized(renderer, &font, buffer, buffer_size, vec2fs(0.0f), 0xFFFFFFFF, FONT_SCALE);
-        render_cursor(renderer, 0xFFFFFFFF);
+        render_cursor(renderer, &font);
 
         SDL_RenderPresent(renderer);
     }
