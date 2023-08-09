@@ -101,7 +101,7 @@ Font font_load_from_file(SDL_Renderer *renderer, const char *filename)
     return font;
 }
 
-void render_char(SDL_Renderer *renderer, const Font *font, char c, Vec2f pos, float scale)
+void render_char(SDL_Renderer *renderer, const Font *font, char c, const Vec2f pos, float scale)
 {
     assert(c >= ASCII_DISPLAY_LOW);
     assert(c <= ASCII_DISPLAY_HIGH);
@@ -141,16 +141,41 @@ void render_text_sized(SDL_Renderer *renderer, Font *font, const char *text,
     }
 }
 
-void render_text(SDL_Renderer *renderer, Font *font, const char *text, 
-                 Vec2f pos, Uint32 color, float scale)
-{
-    render_text_sized(renderer, font, text, strlen(text), pos, color, scale);
-}
-
 #define BUFFER_CAPACITY 1024
 char buffer[BUFFER_CAPACITY];
 size_t buffer_cursor = 0;
 size_t buffer_size = 0;
+
+void buffer_insert_text_before_cursor(const char *text)
+{
+    size_t text_size = strlen(text);
+    const size_t free_space = BUFFER_CAPACITY - buffer_size;
+    if (text_size > free_space) {
+        text_size = free_space;
+    }
+    memmove(buffer + buffer_cursor + text_size, // Where to
+            buffer + buffer_cursor, // Whence
+            buffer_size - buffer_cursor); // How many bytes
+
+    memcpy(buffer + buffer_cursor, text, text_size);
+
+    buffer_size += text_size;
+    buffer_cursor += text_size;
+}
+
+void buffer_backspace(void)
+{
+    if (buffer_size == 0 || buffer_cursor == 0) {
+        return;
+    }
+    
+    memmove(buffer + buffer_cursor - 1, 
+            buffer + buffer_cursor, 
+            buffer_size - buffer_cursor);
+
+    buffer_size--;
+    buffer_cursor--;
+}
 
 #define UNHEX(color) \
     (color) >> (0 * 8) & 0xff, \
@@ -204,11 +229,15 @@ int main(void)
 
                 case SDL_KEYDOWN: {
                     switch (event.key.keysym.sym) {
-                        case SDLK_BACKSPACE: {
-                            if (buffer_size > 0) {
-                                buffer_size -= 1;
-                                buffer_cursor = buffer_size;
+                        case SDLK_BACKSPACE:
+                        case SDLK_DELETE: {
+                            if (event.key.keysym.sym == SDLK_DELETE) {
+                                if (buffer_cursor == buffer_size) {
+                                    break;
+                                }
+                                buffer_cursor++;
                             }
+                            buffer_backspace();
                         } break;
 
                         case SDLK_LEFT: {
@@ -227,14 +256,7 @@ int main(void)
 
 
                 case SDL_TEXTINPUT: {
-                    size_t text_size = strlen(event.text.text);
-                    const size_t free_space = BUFFER_CAPACITY - buffer_size;
-                    if (text_size > free_space) {
-                        text_size = free_space;
-                    }
-                    memcpy(buffer + buffer_size, event.text.text, text_size);
-                    buffer_size += text_size;
-                    buffer_cursor = buffer_size;
+                    buffer_insert_text_before_cursor(event.text.text);
                 } break;
             }
         }
