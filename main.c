@@ -17,7 +17,7 @@
 #define FONT_ROWS           7
 #define FONT_CHAR_WIDTH     (int) (FONT_WIDTH  / FONT_COLS)
 #define FONT_CHAR_HEIGHT    (int) (FONT_HEIGHT / FONT_ROWS)
-#define FONT_SCALE          3.0f
+#define FONT_SCALE          2.0f
 
 // SDL check codes
 void scc(int code)
@@ -130,14 +130,14 @@ void set_texture_color(SDL_Texture *texture, Uint32 color)
     scc(SDL_SetTextureAlphaMod(texture, (color >> (3 * 8)) & 0xff));
 }
 
-void render_text_sized(SDL_Renderer *renderer, Font *font, const char *text, 
+void render_text_sized(SDL_Renderer *renderer, Font *font, const char *s, 
                        size_t text_size, Vec2f pos, Uint32 color, float scale)
 {
     set_texture_color(font->spritesheet, color);
 
     Vec2f pen = pos;
     for (size_t i = 0; i < text_size; i++) {
-        render_char(renderer, font, text[i], pen, scale);
+        render_char(renderer, font, s[i], pen, scale);
         pen.x += scale * FONT_CHAR_WIDTH;
     }
 }
@@ -152,7 +152,10 @@ Editor e = {0};
 
 void render_cursor(SDL_Renderer *renderer, const Font *font)
 {
-    const Vec2f pos = vec2f(e.cx * FONT_CHAR_WIDTH * FONT_SCALE, e.cy * FONT_CHAR_HEIGHT * FONT_SCALE);
+    
+    size_t ecx_pos = (e.cx > get_line_length(&e)) ? get_line_length(&e) : e.cx;
+
+    const Vec2f pos = vec2f(ecx_pos * FONT_CHAR_WIDTH * FONT_SCALE, e.cy * FONT_CHAR_HEIGHT * FONT_SCALE);
     SDL_Rect rect = {
         .x = (int) floorf(pos.x),
         .y = (int) floorf(pos.y),
@@ -165,9 +168,28 @@ void render_cursor(SDL_Renderer *renderer, const Font *font)
 
     set_texture_color(font->spritesheet, 0xFF000000);
 
-    if (e.cx < ((Line *) list_get(&e.lines, e.cy))->size) {
-        render_char(renderer, font, ((Line *) list_get(&e.lines, e.cy))->s[e.cx], pos, FONT_SCALE);
+    Line *line = list_get(&e.lines, e.cy);
+    if (e.cy != e.lines.length && e.cx < line->size) {
+        render_char(renderer, font, line->s[e.cx], pos, FONT_SCALE);
     }
+}
+
+const int keymap[] = {
+    SDLK_LEFT,
+    SDLK_RIGHT,
+    SDLK_UP,
+    SDLK_DOWN,
+    SDLK_HOME,
+    SDLK_END,
+    SDLK_PAGEUP,
+    SDLK_PAGEDOWN,
+};
+
+EditorMoveKey find_move_key(int code) {
+    for (size_t i = 0; i < sizeof(keymap) / sizeof(keymap[0]); i++) {
+        if (keymap[i] == code) return i;
+    }
+    return 0;
 }
 
 
@@ -204,33 +226,34 @@ int main(void)
                         } break;
 
                         case SDLK_DELETE: {
-                            if (e.cx < ((Line *)list_get(&e.lines, e.cy))->size) {
-                                e.cx++;
-                                editor_delete_char(&e);
-                            }
-                        } break;
-
-                        case SDLK_LEFT: {
-                            editor_move(&e, EDITOR_LEFT);
-                        } break;
-
-                        case SDLK_RIGHT: {
                             editor_move(&e, EDITOR_RIGHT);
+                            editor_delete_char(&e);
                         } break;
 
-                        case SDLK_HOME: {
-                            editor_move(&e, EDITOR_HOME);
+                        case SDLK_RETURN: {
+                            e.cy++;
+                            editor_new_line(&e);
                         } break;
 
-                        case SDLK_END: {
-                            editor_move(&e, EDITOR_END);
+                        case SDLK_LEFT:
+                        case SDLK_RIGHT: 
+                        case SDLK_UP:
+                        case SDLK_DOWN:
+                        case SDLK_HOME: 
+                        case SDLK_END:
+                        case SDLK_PAGEUP:
+                        case SDLK_PAGEDOWN: {
+                            editor_move(&e, find_move_key(event.key.keysym.sym));
                         }
                     }
                 } break;
 
 
                 case SDL_TEXTINPUT: {
-                    editor_insert(&e, event.text.text);
+                    char c;
+                    for (int i = 0; (c = event.text.text[i]) != '\0'; i++) {
+                        editor_insert_char(&e, c);
+                    }
                 } break;
             }
         }
@@ -238,7 +261,10 @@ int main(void)
         /*  Clear the screen */
         scc(SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0));
         scc(SDL_RenderClear(renderer));
-        render_text_sized(renderer, &font, ((Line *) list_get(&e.lines, e.cy))->s, ((Line *) list_get(&e.lines, e.cy))->size, vec2fs(0.0f), 0xFFFFFFFF, FONT_SCALE);
+        for (size_t i = 0; i < e.lines.length; i++) {
+            Line *line = list_get(&e.lines, i);
+            render_text_sized(renderer, &font, line->s, line->size, vec2f(0.0f, i * FONT_SCALE * FONT_CHAR_HEIGHT), 0xFFFFFFFF, FONT_SCALE);
+        }
         render_cursor(renderer, &font);
 
         SDL_RenderPresent(renderer);
