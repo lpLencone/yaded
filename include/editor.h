@@ -12,22 +12,28 @@ typedef enum {
     EDITOR_HOME,
     EDITOR_END,
     EDITOR_PAGEUP,
-    EDITOR_PAGEDOWN
-} EditorMoveKey;
+    EDITOR_PAGEDOWN,
+} EditorMoveKeys;
+
+typedef enum {
+    EDITOR_BACKSPACE,
+    EDITOR_DELETE,
+    EDITOR_RETURN,
+    EDITOR_TAB,
+    EDITOR_SAVE,
+} EditorEditKeys;
 
 typedef struct {
     List lines;
-
-    // Cursor x and y positions
     size_t cx, cy;
 } Editor;
 
 Editor editor_init(void);
 void editor_insert_char(Editor *e, char c);
 void editor_delete_char(Editor *e);
-void editor_move(Editor *e, EditorMoveKey);
+void editor_edit(Editor *e, EditorEditKeys key);
+void editor_move(Editor *e, EditorMoveKeys);
 size_t get_line_length(Editor *e);
 void editor_new_line(Editor *e);
-
 
 #endif // YADED_EDITOR_H_

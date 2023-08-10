@@ -173,7 +173,7 @@ void render_cursor(SDL_Renderer *renderer, const Font *font)
     }
 }
 
-const int keymap[] = {
+const int move_keymap[] = {
     SDLK_LEFT,
     SDLK_RIGHT,
     SDLK_UP,
@@ -184,13 +184,31 @@ const int keymap[] = {
     SDLK_PAGEDOWN,
 };
 
-EditorMoveKey find_move_key(int code) {
-    for (size_t i = 0; i < sizeof(keymap) / sizeof(keymap[0]); i++) {
-        if (keymap[i] == code) return i;
+const size_t move_keymap_size = sizeof(move_keymap) / sizeof(move_keymap[0]);
+
+EditorMoveKeys find_move_key(int code) {
+    for (size_t i = 0; i < move_keymap_size; i++) {
+        if (move_keymap[i] == code) return i;
     }
-    return 0;
+    assert(0);
 }
 
+const int edit_keymap[] = {
+    SDLK_BACKSPACE,
+    SDLK_DELETE,
+    SDLK_RETURN,
+    SDLK_TAB,
+    SDLK_F3,
+};
+
+const size_t edit_keymap_size = sizeof(edit_keymap) / sizeof(edit_keymap[0]);
+
+EditorEditKeys find_edit_key(int code) {
+    for (size_t i = 0; i < edit_keymap_size; i++) {
+        if (edit_keymap[i] == code) return i;
+    }
+    assert(0);
+}
 
 int main(void)
 {
@@ -198,7 +216,7 @@ int main(void)
     scc(TTF_Init());
 
     SDL_Window *window = scp(
-        SDL_CreateWindow("Text Editor", 0, 0, 800, 600, SDL_WINDOW_RESIZABLE)
+        SDL_CreateWindow("Text Editor", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 600, SDL_WINDOW_RESIZABLE)
     );
 
     SDL_Renderer *renderer = scp(
@@ -220,21 +238,12 @@ int main(void)
 
                 case SDL_KEYDOWN: {
                     switch (event.key.keysym.sym) {
-                        case SDLK_BACKSPACE: {
-                            editor_delete_char(&e);
-                        } break;
-
-                        case SDLK_DELETE: {
-                            editor_move(&e, EDITOR_RIGHT);
-                            editor_delete_char(&e);
-                        } break;
-
-                        case SDLK_RETURN: {
-                            editor_new_line(&e);
-                        } break;
-
-                        case SDLK_TAB: {
-                            // TODO
+                        case SDLK_BACKSPACE: 
+                        case SDLK_DELETE: 
+                        case SDLK_RETURN: 
+                        case SDLK_TAB: 
+                        case SDLK_F3: {
+                            editor_edit(&e, find_edit_key(event.key.keysym.sym));
                         } break;
 
                         case SDLK_LEFT:

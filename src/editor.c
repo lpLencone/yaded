@@ -1,12 +1,15 @@
 #include "editor.h"
 
 #include <assert.h>
-#include <string.h>
+#include <errno.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static void remove_line(Editor *e);
 static void merge_line(Editor *e);
 static void break_line(Editor *e);
+static void save_file(Editor *e, const char *filename);
 
 Editor editor_init(void)
 {
@@ -21,7 +24,40 @@ Editor editor_init(void)
     return e;
 }
 
-void editor_move(Editor *e, EditorMoveKey key)
+void editor_edit(Editor *e, EditorEditKeys key)
+{
+    switch(key) {
+        case EDITOR_BACKSPACE: {
+            editor_delete_char(e);
+        } break;
+
+        case EDITOR_DELETE: {
+            if (e->cy + 1 < e->lines.length ||
+                e->cx < get_line_length(e)) 
+            {
+                editor_move(e, EDITOR_RIGHT);
+                editor_delete_char(e);
+            }
+        } break;
+
+        case EDITOR_RETURN: {
+            editor_new_line(e);
+        } break;
+
+        case EDITOR_TAB: {
+            // TODO
+        } break;
+
+        case EDITOR_SAVE: {
+            save_file(e, "outputtt");
+        } break;
+
+        default:
+            assert(0);
+    }
+}
+
+void editor_move(Editor *e, EditorMoveKeys key)
 {
     size_t line_size = get_line_length(e);
 
@@ -43,7 +79,7 @@ void editor_move(Editor *e, EditorMoveKey key)
         case EDITOR_RIGHT: {
             if (e->cx < line_size) {
                 e->cx++;
-            } else {
+            } else if (e->cy + 1 < e->lines.length) {
                 editor_move(e, EDITOR_DOWN);
                 editor_move(e, EDITOR_HOME);
             }
@@ -97,9 +133,6 @@ void editor_delete_char(Editor *e)
 {
     if (e->cx == 0 && e->cy == 0) {
         return;
-    } else if (e->cy == e->lines.length) {
-        editor_move(e, EDITOR_LEFT);
-        return;
     }
 
     Line *line = list_get(&e->lines, e->cy);
@@ -128,6 +161,22 @@ size_t get_line_length(Editor *e)
 {
     Line *line = list_get(&e->lines, e->cy);
     return (line == NULL) ? 0: line->size;
+}
+
+void save_file(Editor *e, const char *filename)
+{
+    FILE *file = fopen(filename, "w");
+    if (file == NULL) {
+        fprintf(stderr, "Could not open file `%s`: %s\n", filename, strerror(errno));
+        exit(1);
+    }
+
+    for (size_t i = 0; i < e->lines.length; i++) {
+        Line *line = list_get(&e->lines, i);
+        fwrite(line->s, 1, line->size, file);
+        fputc('\n', file);
+    }
+    fclose(file);
 }
 
 static void remove_line(Editor *e)
