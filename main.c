@@ -6,7 +6,7 @@
 #include <SDL2/SDL_ttf.h>
 
 #include "la.h"
-#include "line.h"
+#include "editor.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -142,9 +142,7 @@ void render_text_sized(SDL_Renderer *renderer, Font *font, const char *text,
     }
 }
 
-
-Line line = {0};
-size_t cursor = 0;
+Editor e = {0};
 
 #define UNHEX(color) \
     (color) >> (0 * 8) & 0xff, \
@@ -154,7 +152,7 @@ size_t cursor = 0;
 
 void render_cursor(SDL_Renderer *renderer, const Font *font)
 {
-    const Vec2f pos = vec2f(cursor * FONT_CHAR_WIDTH * FONT_SCALE, 0.0f);
+    const Vec2f pos = vec2f(e.cx * FONT_CHAR_WIDTH * FONT_SCALE, e.cy * FONT_CHAR_HEIGHT * FONT_SCALE);
     SDL_Rect rect = {
         .x = (int) floorf(pos.x),
         .y = (int) floorf(pos.y),
@@ -167,10 +165,11 @@ void render_cursor(SDL_Renderer *renderer, const Font *font)
 
     set_texture_color(font->spritesheet, 0xFF000000);
 
-    if (cursor < line.size) {
-        render_char(renderer, font, line.s[cursor], pos, FONT_SCALE);
+    if (e.cx < ((Line *) list_get(&e.lines, e.cy))->size) {
+        render_char(renderer, font, ((Line *) list_get(&e.lines, e.cy))->s[e.cx], pos, FONT_SCALE);
     }
 }
+
 
 int main(void)
 {
@@ -187,6 +186,8 @@ int main(void)
 
     Font font = font_load_from_file(renderer, "charmap-oldschool_white.png");
 
+    e = editor_init();
+
     bool quit = false;
     while (!quit) {
         SDL_Event event = {0};
@@ -199,34 +200,37 @@ int main(void)
                 case SDL_KEYDOWN: {
                     switch (event.key.keysym.sym) {
                         case SDLK_BACKSPACE: {
-                            line_backspace(&line, cursor);
-                            if (cursor > 0) {
-                                cursor--;
-                            }
+                            editor_delete_char(&e);
                         } break;
 
                         case SDLK_DELETE: {
-                            line_delete(&line, cursor);
+                            if (e.cx < ((Line *)list_get(&e.lines, e.cy))->size) {
+                                e.cx++;
+                                editor_delete_char(&e);
+                            }
                         } break;
 
                         case SDLK_LEFT: {
-                            if (cursor > 0) {
-                                cursor--;
-                            }
+                            editor_move(&e, EDITOR_LEFT);
                         } break;
 
                         case SDLK_RIGHT: {
-                            if (cursor < line.size) {
-                                cursor++;
-                            }
+                            editor_move(&e, EDITOR_RIGHT);
                         } break;
+
+                        case SDLK_HOME: {
+                            editor_move(&e, EDITOR_HOME);
+                        } break;
+
+                        case SDLK_END: {
+                            editor_move(&e, EDITOR_END);
+                        }
                     }
                 } break;
 
 
                 case SDL_TEXTINPUT: {
-                    line_insert(&line, event.text.text, cursor);
-                    cursor += strlen(event.text.text);
+                    editor_insert(&e, event.text.text);
                 } break;
             }
         }
@@ -234,8 +238,7 @@ int main(void)
         /*  Clear the screen */
         scc(SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0));
         scc(SDL_RenderClear(renderer));
-
-        render_text_sized(renderer, &font, line.s, line.size, vec2fs(0.0f), 0xFFFFFFFF, FONT_SCALE);
+        render_text_sized(renderer, &font, ((Line *) list_get(&e.lines, e.cy))->s, ((Line *) list_get(&e.lines, e.cy))->size, vec2fs(0.0f), 0xFFFFFFFF, FONT_SCALE);
         render_cursor(renderer, &font);
 
         SDL_RenderPresent(renderer);
