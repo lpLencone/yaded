@@ -152,7 +152,6 @@ Editor e = {0};
 
 void render_cursor(SDL_Renderer *renderer, const Font *font)
 {
-    
     size_t ecx_pos = (e.cx > get_line_length(&e)) ? get_line_length(&e) : e.cx;
 
     const Vec2f pos = vec2f(ecx_pos * FONT_CHAR_WIDTH * FONT_SCALE, e.cy * FONT_CHAR_HEIGHT * FONT_SCALE);
@@ -231,8 +230,11 @@ int main(void)
                         } break;
 
                         case SDLK_RETURN: {
-                            e.cy++;
                             editor_new_line(&e);
+                        } break;
+
+                        case SDLK_TAB: {
+                            // TODO
                         } break;
 
                         case SDLK_LEFT:

@@ -46,7 +46,7 @@ void line_delete_char(Line *line, size_t at)
     memmove(line->s + at, line->s + at + 1, line->size + 1 - at);
     line->size--;
 
-    if (line->size - 1 < line->capacity / 2) {
+    if (line->size - 1 < line->capacity / 4) {
         line->s = realloc(line->s, line->capacity / 2);
         line->capacity /= 2;
     }

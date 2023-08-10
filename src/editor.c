@@ -6,6 +6,7 @@
 
 static void remove_line(Editor *e);
 static void merge_line(Editor *e);
+static void break_line(Editor *e);
 
 Editor editor_init(void)
 {
@@ -55,7 +56,7 @@ void editor_move(Editor *e, EditorMoveKey key)
         } break;
 
         case EDITOR_DOWN: {
-            if (e->cy < e->lines.length) {
+            if (e->cy + 1 < e->lines.length) {
                 e->cy++;
             }
         } break;
@@ -80,11 +81,7 @@ void editor_move(Editor *e, EditorMoveKey key)
 
 void editor_insert_char(Editor *e, char c)
 {
-    assert(e->cy <= e->lines.length);
-
-    if (e->cy == e->lines.length) {
-        editor_new_line(e);
-    }
+    assert(e->cy < e->lines.length);
 
     Line *line = list_get(&e->lines, e->cy);
 
@@ -122,7 +119,9 @@ void editor_delete_char(Editor *e)
 void editor_new_line(Editor *e)
 {
     Line line = line_init();
-    list_insert(&e->lines, &line, sizeof(line), e->cy);
+    list_insert(&e->lines, &line, sizeof(line), e->cy + 1);
+    break_line(e);
+    editor_move(e, EDITOR_RIGHT);
 }
 
 size_t get_line_length(Editor *e)
@@ -153,4 +152,15 @@ static void merge_line(Editor *e)
 
     editor_move(e, EDITOR_DOWN);
     remove_line(e);
+}
+
+static void break_line(Editor *e)
+{
+    Line *line = list_get(&e->lines, e->cy);
+    Line *new_line = list_get(&e->lines, e->cy + 1);
+
+    while (e->cx < line->size) {
+        line_insert_char(new_line, line->s[e->cx], new_line->size);
+        line_delete_char(line, e->cx);
+    }
 }
