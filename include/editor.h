@@ -26,13 +26,17 @@ typedef enum {
 typedef struct {
     List lines;
     size_t cx, cy;
+    
+    const char *filename;
 } Editor;
 
-Editor editor_init(void);
-void editor_insert_char(Editor *e, char c);
+Editor editor_init(const char *filename);
+void editor_insert_text(Editor *e, const char *s);
 void editor_delete_char(Editor *e);
+
 void editor_edit(Editor *e, EditorEditKeys key);
 void editor_move(Editor *e, EditorMoveKeys);
+
 size_t get_line_length(Editor *e);
 void editor_new_line(Editor *e);
 

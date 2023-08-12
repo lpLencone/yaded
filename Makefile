@@ -1,6 +1,6 @@
 CC 		:= gcc
-CFLAGS	:= -Wall -Wextra -std=c11 -pedantic -ggdb `pkg-config --cflags sdl2`
-LIBS	:= `pkg-config --libs sdl2` -lm -lSDL2_ttf
+CFLAGS	:= -Wall -Wextra -std=c11 -pedantic -ggdb
+LIBS	:= -lSDL2 -lSDL2_ttf -lm
 SRC		:= $(shell find src -type f)
 INCLUDE := -Iinclude
 

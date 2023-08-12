@@ -18,19 +18,19 @@ Line line_init(void)
     return line;
 }
 
-void line_insert_char(Line *line, char c, size_t at)
+void line_insert_text(Line *line, const char *s, size_t at)
 {
-    assert(at <= line->size + 1);
+    size_t slen = strlen(s);
 
-    if (line->capacity < line->size + 2) {
-        line->s = realloc(line->s, line->size * 2);
+    while (line->capacity < line->size + slen + 2) {
+        line->s = realloc(line->s, line->capacity * 2);
         line->capacity *= 2;
     }
 
-    memmove(line->s + at + 1, line->s + at, line->size - at);
-    line->s[at] = c;
+    memmove(line->s + at + slen, line->s + at, line->size - at);
+    memcpy(line->s + at, s, slen);
     
-    line->size++;
+    line->size += slen;
     line->s[line->size] = '\0';
 }
 

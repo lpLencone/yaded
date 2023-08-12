@@ -107,6 +107,7 @@ void render_char(SDL_Renderer *renderer, const Font *font, char c, const Vec2f p
     assert(c >= ASCII_DISPLAY_LOW);
     assert(c <= ASCII_DISPLAY_HIGH);
 
+
     const SDL_Rect destine = {
         .x = (int) floorf(pos.x),
         .y = (int) floorf(pos.y),
@@ -144,11 +145,11 @@ void render_text_sized(SDL_Renderer *renderer, Font *font, const char *s,
 
 Editor e = {0};
 
-#define UNHEX(color) \
-    (color) >> (0 * 8) & 0xff, \
-    (color) >> (0 * 1) & 0xff, \
-    (color) >> (0 * 2) & 0xff, \
-    (color) >> (0 * 3) & 0xff \
+#define UNHEX(color)            \
+    (color) >> (0 * 8) & 0xff,  \
+    (color) >> (0 * 1) & 0xff,  \
+    (color) >> (0 * 2) & 0xff,  \
+    (color) >> (0 * 3) & 0xff   \
 
 void render_cursor(SDL_Renderer *renderer, const Font *font)
 {
@@ -210,8 +211,13 @@ EditorEditKeys find_edit_key(int code) {
     assert(0);
 }
 
-int main(void)
+int main(int argc, char *argv[])
 {
+    char *filename = NULL;
+    if (argc > 1) {
+        filename = argv[1];
+    }
+
     scc(SDL_Init(SDL_INIT_VIDEO));
     scc(TTF_Init());
 
@@ -225,7 +231,7 @@ int main(void)
 
     Font font = font_load_from_file(renderer, "charmap-oldschool_white.png");
 
-    e = editor_init();
+    e = editor_init(filename);
 
     bool quit = false;
     while (!quit) {
@@ -261,10 +267,7 @@ int main(void)
 
 
                 case SDL_TEXTINPUT: {
-                    char c;
-                    for (int i = 0; (c = event.text.text[i]) != '\0'; i++) {
-                        editor_insert_char(&e, c);
-                    }
+                    editor_insert_text(&e, event.text.text);
                 } break;
             }
         }
@@ -285,3 +288,4 @@ int main(void)
 
     return 0;
 }
+

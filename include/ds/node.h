@@ -6,9 +6,9 @@
 
 #include <stddef.h>
 
-typedef struct _Node {
+typedef struct Node {
     void *data;
-    struct _Node *next;
+    struct Node *next;
 } Node;
 
 Node   *node_init(const void *data, size_t size);
