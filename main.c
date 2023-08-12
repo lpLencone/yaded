@@ -25,6 +25,8 @@
 #define FONT_CHAR_HEIGHT    (int) (FONT_HEIGHT / FONT_ROWS)
 #define FONT_SCALE          2.0f
 
+Vec2f camera_project_point(SDL_Window *window, Vec2f point);
+
 // SDL check codes
 void scc(int code)
 {
@@ -113,7 +115,6 @@ void render_char(SDL_Renderer *renderer, const Font *font, char c, const Vec2f p
     assert(c >= ASCII_DISPLAY_LOW);
     assert(c <= ASCII_DISPLAY_HIGH);
 
-
     const SDL_Rect destine = {
         .x = (int) floorf(pos.x),
         .y = (int) floorf(pos.y),
@@ -160,13 +161,15 @@ Vec2f camera_vel = {0};
     (color) >> (0 * 2) & 0xff,  \
     (color) >> (0 * 3) & 0xff   \
 
-void render_cursor(SDL_Renderer *renderer, const Font *font)
+void render_cursor(SDL_Window *window, SDL_Renderer *renderer, const Font *font)
 {
     size_t ecx_pos = (e.cx > get_line_length(&e)) ? get_line_length(&e) : e.cx;
-    Vec2f cursor_pos = vec2f(ecx_pos * FONT_CHAR_WIDTH * FONT_SCALE, 
-                       e.cy * FONT_CHAR_HEIGHT * FONT_SCALE);
 
-    const Vec2f cursor_render_pos = vec2f_sub(cursor_pos, camera_pos);
+    Vec2f cursor_render_pos = camera_project_point(
+        window, 
+        vec2f(ecx_pos * FONT_CHAR_WIDTH  * FONT_SCALE, 
+              e.cy    * FONT_CHAR_HEIGHT * FONT_SCALE)
+    );
 
     SDL_Rect rect = {
         .x = (int) floorf(cursor_render_pos.x),
@@ -221,6 +224,21 @@ EditorEditKeys find_edit_key(int code) {
         if (edit_keymap[i] == code) return i;
     }
     assert(0);
+}
+
+Vec2f window_size(SDL_Window *window)
+{
+    int w, h;
+    SDL_GetWindowSize(window, &w, &h);
+    return vec2f((float) w, (float) h);
+}
+
+Vec2f camera_project_point(SDL_Window *window, Vec2f point)
+{
+    return vec2f_add(
+        vec2f_sub(point, camera_pos),
+        vec2f_mul(window_size(window), vec2fs(0.5f))
+    );
 }
 
 int main(int argc, char *argv[])
@@ -289,25 +307,25 @@ int main(int argc, char *argv[])
         size_t ecx_pos = (e.cx > get_line_length(&e)) ? get_line_length(&e) : e.cx;
 
         const Vec2f cursor_pos = vec2f(ecx_pos * FONT_CHAR_WIDTH * FONT_SCALE, 
-                                       e.cy * FONT_CHAR_HEIGHT * FONT_SCALE);
+                                        e.cy * FONT_CHAR_HEIGHT * FONT_SCALE);
 
-        camera_vel = vec2f_sub(cursor_pos, camera_pos);
+        camera_vel = vec2f_mul(vec2f_sub(cursor_pos, camera_pos), vec2fs(2.0f));
         camera_pos = vec2f_add(camera_pos, vec2f_mul(camera_vel, vec2fs(DELTA_TIME)));
 
         /*  Clear the screen */
         scc(SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0));
         scc(SDL_RenderClear(renderer));
-        for (size_t i = 0; i < e.lines.length; i++) {
-            Line *line = list_get(&e.lines, i);
+        for (size_t cy = 0; cy < e.lines.length; cy++) {
+            Line *line = list_get(&e.lines, cy);
             
-            Vec2f line_pos = vec2f_sub(
-                vec2f(0.0f, i * FONT_SCALE * FONT_CHAR_HEIGHT),
-                camera_pos
+            Vec2f line_pos = camera_project_point(
+                window, 
+                vec2f(0.0f, cy * FONT_SCALE * FONT_CHAR_HEIGHT)
             );
 
             render_text_sized(renderer, &font, line->s, line->size, line_pos, 0xFFFFFFFF, FONT_SCALE);
         }
-        render_cursor(renderer, &font);
+        render_cursor(window, renderer, &font);
 
         SDL_RenderPresent(renderer);
 

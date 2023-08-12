@@ -151,17 +151,13 @@ void editor_delete_char(Editor *e)
         return;
     }
 
+    editor_move(e, EDITOR_LEFT);
+
     Line *line = list_get(&e->lines, e->cy);
-    
-    if (e->cx > 0) {
-        if (e->cx > line->size) {
-            e->cx = line->size;
-        }
-        e->cx--;
-        line_delete_char(line, e->cx);
-    } else {
-        editor_move(e, EDITOR_LEFT);
+    if (e->cx == line->size) {
         merge_line(e);
+    } else {
+        line_delete_char(line, e->cx);
     }
 }
 

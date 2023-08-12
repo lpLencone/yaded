@@ -4,6 +4,9 @@
 #include "ds/list.h"
 #include "line.h"
 
+#define line_debug printf("line size: %ld\n", get_line_length(e));
+#define editor_debug printf("(%ld, %ld)\n", e->cx, e->cy);
+
 typedef enum {
     EDITOR_LEFT,
     EDITOR_RIGHT,

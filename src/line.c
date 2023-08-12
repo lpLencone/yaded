@@ -34,7 +34,6 @@ void line_insert_text(Line *line, const char *s, size_t at)
     line->s[line->size] = '\0';
 }
 
-// Delete char at `at`
 void line_delete_char(Line *line, size_t at)
 {
     assert(at < line->size);
