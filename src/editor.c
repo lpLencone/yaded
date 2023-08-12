@@ -277,6 +277,8 @@ static void open_file(Editor *e)
             free(c_chunk);
         }
     }
+
+    e->cy = 0;
 }
 
 
