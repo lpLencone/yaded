@@ -3,7 +3,13 @@
 #include <stdlib.h>
 
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_ttf.h>
+
+#define GLEW_STATIC
+#include <GL/glew.h>
+#define GL_GLEXT_PROTOTYPES
+#include <SDL2/SDL_opengl.h>
+
+#define OPENGL_RENDERER
 
 #include "la.h"
 #include "editor.h"
@@ -24,8 +30,6 @@
 #define FONT_CHAR_WIDTH     (int) (FONT_WIDTH  / FONT_COLS)
 #define FONT_CHAR_HEIGHT    (int) (FONT_HEIGHT / FONT_ROWS)
 #define FONT_SCALE          2.0f
-
-Vec2f camera_project_point(SDL_Window *window, Vec2f point);
 
 // SDL check codes
 void scc(int code)
@@ -161,71 +165,6 @@ Vec2f camera_vel = {0};
     (color) >> (0 * 2) & 0xff,  \
     (color) >> (0 * 3) & 0xff   \
 
-void render_cursor(SDL_Window *window, SDL_Renderer *renderer, const Font *font)
-{
-    size_t ecx_pos = (e.cx > get_line_length(&e)) ? get_line_length(&e) : e.cx;
-
-    Vec2f cursor_render_pos = camera_project_point(
-        window, 
-        vec2f(ecx_pos * FONT_CHAR_WIDTH  * FONT_SCALE, 
-              e.cy    * FONT_CHAR_HEIGHT * FONT_SCALE)
-    );
-
-    SDL_Rect rect = {
-        .x = (int) floorf(cursor_render_pos.x),
-        .y = (int) floorf(cursor_render_pos.y),
-        .w = FONT_CHAR_WIDTH * FONT_SCALE,
-        .h = FONT_CHAR_HEIGHT * FONT_SCALE,
-    };
-
-    scc(SDL_SetRenderDrawColor(renderer, UNHEX(0xFFFFFFFF)));
-    scc(SDL_RenderFillRect(renderer, &rect));
-
-    set_texture_color(font->spritesheet, 0xFF000000);
-
-    Line *line = list_get(&e.lines, e.cy);
-    if (e.cy != e.lines.length && e.cx < line->size) {
-        render_char(renderer, font, line->s[e.cx], cursor_render_pos, FONT_SCALE);
-    }
-}
-
-const int move_keymap[] = {
-    SDLK_LEFT,
-    SDLK_RIGHT,
-    SDLK_UP,
-    SDLK_DOWN,
-    SDLK_HOME,
-    SDLK_END,
-    SDLK_PAGEUP,
-    SDLK_PAGEDOWN,
-};
-
-const size_t move_keymap_size = sizeof(move_keymap) / sizeof(move_keymap[0]);
-
-EditorMoveKeys find_move_key(int code) {
-    for (size_t i = 0; i < move_keymap_size; i++) {
-        if (move_keymap[i] == code) return i;
-    }
-    assert(0);
-}
-
-const int edit_keymap[] = {
-    SDLK_BACKSPACE,
-    SDLK_DELETE,
-    SDLK_RETURN,
-    SDLK_TAB,
-    SDLK_F3,
-};
-
-const size_t edit_keymap_size = sizeof(edit_keymap) / sizeof(edit_keymap[0]);
-
-EditorEditKeys find_edit_key(int code) {
-    for (size_t i = 0; i < edit_keymap_size; i++) {
-        if (edit_keymap[i] == code) return i;
-    }
-    assert(0);
-}
-
 Vec2f window_size(SDL_Window *window)
 {
     int w, h;
@@ -240,6 +179,63 @@ Vec2f camera_project_point(SDL_Window *window, Vec2f point)
         vec2f_mul(window_size(window), vec2fs(0.5f))
     );
 }
+
+void render_cursor(SDL_Window *window, SDL_Renderer *renderer, const Font *font, float scale)
+{
+    size_t ecx_pos = (e.cx > get_line_length(&e)) ? get_line_length(&e) : e.cx;
+
+    Vec2f cursor_render_pos = camera_project_point(
+        window, 
+        vec2f(ecx_pos * FONT_CHAR_WIDTH  * scale, 
+              e.cy    * FONT_CHAR_HEIGHT * scale)
+    );
+
+    SDL_Rect rect = {
+        .x = (int) floorf(cursor_render_pos.x),
+        .y = (int) floorf(cursor_render_pos.y),
+        .w = FONT_CHAR_WIDTH * scale,
+        .h = FONT_CHAR_HEIGHT * scale,
+    };
+
+    scc(SDL_SetRenderDrawColor(renderer, UNHEX(0xFFFFFFFF)));
+    scc(SDL_RenderFillRect(renderer, &rect));
+
+    // ABGR
+    set_texture_color(font->spritesheet, 0xFF000000);
+
+    Line *line = list_get(&e.lines, e.cy);
+    if (e.cy != e.lines.length && e.cx < line->size) {
+        render_char(renderer, font, line->s[e.cx], cursor_render_pos, scale);
+    }
+}
+
+const int keymap[] = {
+    SDLK_LEFT,
+    SDLK_RIGHT,
+    SDLK_UP,
+    SDLK_DOWN,
+    SDLK_HOME,
+    SDLK_END,
+    SDLK_PAGEUP,
+    SDLK_PAGEDOWN,
+    SDLK_BACKSPACE,
+    SDLK_DELETE,
+    SDLK_RETURN,
+    SDLK_TAB,
+    SDLK_F3,
+};
+
+const size_t keymap_size = sizeof(keymap) / sizeof(keymap[0]);
+
+EditorKeys find_key(int code) {
+    for (size_t i = 0; i < keymap_size; i++) {
+        if (keymap[i] == code) return i;
+    }
+    assert(0);
+}
+
+
+#ifndef OPENGL_RENDERER
 
 int main(int argc, char *argv[])
 {
@@ -264,9 +260,12 @@ int main(int argc, char *argv[])
 
     e = editor_init(filename);
 
+    float camera_scale = FONT_SCALE;
+
     bool quit = false;
     while (!quit) {
         const Uint32 start = SDL_GetTicks();
+        
         SDL_Event event = {0};
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
@@ -280,10 +279,7 @@ int main(int argc, char *argv[])
                         case SDLK_DELETE: 
                         case SDLK_RETURN: 
                         case SDLK_TAB: 
-                        case SDLK_F3: {
-                            editor_edit(&e, find_edit_key(event.key.keysym.sym));
-                        } break;
-
+                        case SDLK_F3:
                         case SDLK_LEFT:
                         case SDLK_RIGHT: 
                         case SDLK_UP:
@@ -292,11 +288,15 @@ int main(int argc, char *argv[])
                         case SDLK_END:
                         case SDLK_PAGEUP:
                         case SDLK_PAGEDOWN: {
-                            editor_move(&e, find_move_key(event.key.keysym.sym));
+                            editor_process_key(&e, find_key(event.key.keysym.sym));
                         }
                     }
                 } break;
 
+                case SDL_MOUSEWHEEL: {
+                    camera_scale *= (event.wheel.y > 0) ? 1.05 : 0.95;
+                    assert(camera_scale > 0);
+                } break;
 
                 case SDL_TEXTINPUT: {
                     editor_insert_text(&e, event.text.text);
@@ -304,10 +304,10 @@ int main(int argc, char *argv[])
             }
         }
 
-        size_t ecx_pos = (e.cx > get_line_length(&e)) ? get_line_length(&e) : e.cx;
+        // size_t ecx_pos = (e.cx > get_line_length(&e)) ? get_line_length(&e) : e.cx;
 
-        const Vec2f cursor_pos = vec2f(ecx_pos * FONT_CHAR_WIDTH * FONT_SCALE, 
-                                        e.cy * FONT_CHAR_HEIGHT * FONT_SCALE);
+        const Vec2f cursor_pos = vec2f(e.cx * FONT_CHAR_WIDTH  * camera_scale, 
+                                       e.cy * FONT_CHAR_HEIGHT * camera_scale);
 
         camera_vel = vec2f_mul(vec2f_sub(cursor_pos, camera_pos), vec2fs(2.0f));
         camera_pos = vec2f_add(camera_pos, vec2f_mul(camera_vel, vec2fs(DELTA_TIME)));
@@ -320,12 +320,12 @@ int main(int argc, char *argv[])
             
             Vec2f line_pos = camera_project_point(
                 window, 
-                vec2f(0.0f, cy * FONT_SCALE * FONT_CHAR_HEIGHT)
+                vec2f(0.0f, cy * camera_scale * FONT_CHAR_HEIGHT)
             );
 
-            render_text_sized(renderer, &font, line->s, line->size, line_pos, 0xFFFFFFFF, FONT_SCALE);
+            render_text_sized(renderer, &font, line->s, line->size, line_pos, 0xFFFFFFFF, camera_scale);
         }
-        render_cursor(window, renderer, &font);
+        render_cursor(window, renderer, &font, camera_scale);
 
         SDL_RenderPresent(renderer);
 
@@ -340,3 +340,66 @@ int main(int argc, char *argv[])
     return 0;
 }
 
+#else
+
+void MessageCallback(GLenum source, GLenum type, GLuint id, GLenum severity,
+                     GLsizei length, const GLchar* message, const void* userParam)
+{
+    (void) source;
+    (void) id;
+    (void) length;
+    (void) userParam;
+    
+    fprintf(stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
+            (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
+            type, severity, message);
+}
+
+void gl_attr()
+{
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+
+    int major;
+    int minor;
+    SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, &major);
+    SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, &minor);
+    printf("GL version %d.%d\n", major, minor);
+}
+
+int main(void)
+{
+    scc(SDL_Init(SDL_INIT_VIDEO));
+
+    gl_attr();
+
+    SDL_Window *window = scp(
+        SDL_CreateWindow("Text Editor", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 
+                         SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL)
+    );
+
+    // SDL_GLContext context =
+    scp(SDL_GL_CreateContext(window));
+    
+    const GLenum glInitStatus = glewInit();
+    if (glInitStatus != GLEW_OK) {
+        fprintf(stderr, "%s\n", glewGetErrorString(glInitStatus));
+        exit(1);
+    }
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    if (GLEW_ARB_debug_output) {
+        glEnable(GL_DEBUG_OUTPUT);
+        glDebugMessageCallback(MessageCallback, 0);
+    } else {
+        fprintf(stderr, "WARNING! GLEW_ARB_debug_output is not available\n");
+    }
+
+    return 0;
+}
+
+
+#endif // OPENGL_RENDERER

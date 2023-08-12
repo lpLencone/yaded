@@ -22,6 +22,12 @@ static void break_line(Editor *e);
 static void save_file(Editor *e);
 static void open_file(Editor *e);
 
+// Editor Operations
+static void editor_edit(Editor *e, EditorKeys key);
+static void editor_move(Editor *e, EditorKeys key);
+static void editor_action(Editor *e, EditorKeys key);
+
+
 Editor editor_init(const char *filename)
 {
     Editor e;
@@ -42,93 +48,29 @@ Editor editor_init(const char *filename)
     return e;
 }
 
-void editor_edit(Editor *e, EditorEditKeys key)
+void editor_process_key(Editor *e, EditorKeys key)
 {
-    switch(key) {
-        case EDITOR_BACKSPACE: {
-            editor_delete_char(e);
+    switch (key) {
+        case EDITOR_LEFT:
+        case EDITOR_RIGHT:
+        case EDITOR_UP:
+        case EDITOR_DOWN:
+        case EDITOR_HOME:
+        case EDITOR_END:
+        case EDITOR_PAGEUP:
+        case EDITOR_PAGEDOWN: {
+            editor_move(e, key);
         } break;
 
-        case EDITOR_DELETE: {
-            if (e->cy + 1 < e->lines.length ||
-                e->cx < get_line_length(e)) 
-            {
-                editor_move(e, EDITOR_RIGHT);
-                editor_delete_char(e);
-            }
-        } break;
-
-        case EDITOR_RETURN: {
-            editor_new_line(e);
-        } break;
-
+        case EDITOR_BACKSPACE:
+        case EDITOR_DELETE:
+        case EDITOR_RETURN:
         case EDITOR_TAB: {
-            // TODO
+            editor_edit(e, key);
         } break;
 
         case EDITOR_SAVE: {
-            save_file(e);
-        } break;
-
-        default:
-            assert(0);
-    }
-}
-
-void editor_move(Editor *e, EditorMoveKeys key)
-{
-    size_t line_size = get_line_length(e);
-
-    switch (key) {
-        case EDITOR_LEFT: {
-            if (e->cx > 0) {
-                if (e->cx > line_size) {
-                    e->cx = line_size;
-                    editor_move(e, EDITOR_LEFT);
-                } else {
-                    e->cx--;
-                }
-            } else {
-                editor_move(e, EDITOR_UP);
-                editor_move(e, EDITOR_END);
-            }
-        } break;
-
-        case EDITOR_RIGHT: {
-            if (e->cx < line_size) {
-                e->cx++;
-            } else if (e->cy + 1 < e->lines.length) {
-                editor_move(e, EDITOR_DOWN);
-                editor_move(e, EDITOR_HOME);
-            }
-        } break;
-
-        case EDITOR_UP: {
-            if (e->cy > 0) {
-                e->cy--;
-            }
-        } break;
-
-        case EDITOR_DOWN: {
-            if (e->cy + 1 < e->lines.length) {
-                e->cy++;
-            }
-        } break;
-
-        case EDITOR_HOME: {
-            e->cx = 0;
-        } break;
-
-        case EDITOR_END: {
-            e->cx = line_size;
-        } break;
-
-        case EDITOR_PAGEUP: {
-            // TODO
-        } break;
-
-        case EDITOR_PAGEDOWN: {
-            // TODO
+            editor_action(e, key);
         } break;
     }
 }
@@ -175,6 +117,8 @@ size_t get_line_length(Editor *e)
     return (line == NULL) ? 0: line->size;
 }
 
+/* Line operations */
+
 static void remove_line(Editor *e)
 {
     if (e->cy == e->lines.length) {
@@ -207,6 +151,112 @@ static void break_line(Editor *e)
         line_delete_char(line, e->cx);
     }
 }
+
+/* Editor Operations */
+
+static void editor_move(Editor *e, EditorKeys key)
+{
+    size_t line_size = get_line_length(e);
+
+    switch (key) {
+        case EDITOR_LEFT: {
+            if (e->cx > 0) {
+                if (e->cx > line_size) {
+                    e->cx = line_size;
+                    editor_move(e, EDITOR_LEFT);
+                } else {
+                    e->cx--;
+                }
+            } else if (e->cy > 0) {
+                editor_move(e, EDITOR_UP);
+                editor_move(e, EDITOR_END);
+            }
+        } break;
+
+        case EDITOR_RIGHT: {
+            if (e->cx < line_size) {
+                e->cx++;
+            } else if (e->cy + 1 < e->lines.length) {
+                editor_move(e, EDITOR_DOWN);
+                editor_move(e, EDITOR_HOME);
+            }
+        } break;
+
+        case EDITOR_UP: {
+            if (e->cy > 0) {
+                e->cy--;
+            }
+        } break;
+
+        case EDITOR_DOWN: {
+            if (e->cy < e->lines.length - 1) {
+                e->cy++;
+            }
+        } break;
+
+        case EDITOR_HOME: {
+            e->cx = 0;
+        } break;
+
+        case EDITOR_END: {
+            e->cx = line_size;
+        } break;
+
+        case EDITOR_PAGEUP: {
+            // TODO
+        } break;
+
+        case EDITOR_PAGEDOWN: {
+            // TODO
+        } break;
+
+        default:
+            assert(0);
+    }
+}
+
+static void editor_edit(Editor *e, EditorKeys key)
+{
+    switch (key) {
+        case EDITOR_BACKSPACE: {
+            editor_delete_char(e);
+        } break;
+
+        case EDITOR_DELETE: {
+            if (e->cy + 1 < e->lines.length ||
+                e->cx < get_line_length(e)) 
+            {
+                editor_move(e, EDITOR_RIGHT);
+                editor_delete_char(e);
+            }
+        } break;
+
+        case EDITOR_RETURN: {
+            editor_new_line(e);
+        } break;
+
+        case EDITOR_TAB: {
+            // TODO
+        } break;
+
+        default:
+            assert(0);
+    }
+}
+
+static void editor_action(Editor *e, EditorKeys key)
+{
+    switch (key) {
+        case EDITOR_SAVE: {
+            save_file(e);
+        } break;
+
+        default:
+            assert(0);
+    }
+}
+
+/* File I/O */
 
 static void save_file(Editor *e)
 {

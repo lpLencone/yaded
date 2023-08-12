@@ -16,15 +16,12 @@ typedef enum {
     EDITOR_END,
     EDITOR_PAGEUP,
     EDITOR_PAGEDOWN,
-} EditorMoveKeys;
-
-typedef enum {
     EDITOR_BACKSPACE,
     EDITOR_DELETE,
     EDITOR_RETURN,
     EDITOR_TAB,
     EDITOR_SAVE,
-} EditorEditKeys;
+} EditorKeys;
 
 typedef struct {
     List lines;
@@ -36,9 +33,7 @@ typedef struct {
 Editor editor_init(const char *filename);
 void editor_insert_text(Editor *e, const char *s);
 void editor_delete_char(Editor *e);
-
-void editor_edit(Editor *e, EditorEditKeys key);
-void editor_move(Editor *e, EditorMoveKeys);
+void editor_process_key(Editor *e, EditorKeys key);
 
 size_t get_line_length(Editor *e);
 void editor_new_line(Editor *e);
