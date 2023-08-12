@@ -11,6 +11,12 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+#define SCREEN_WIDTH        800
+#define SCREEN_HEIGHT       600
+#define FPS                 60
+#define DELTA_TIME          (1.0f / FPS)
+#define DELTA_TIME_MS       (1000 / FPS)
+
 #define FONT_WIDTH          128
 #define FONT_HEIGHT         64
 #define FONT_COLS           18
@@ -145,6 +151,9 @@ void render_text_sized(SDL_Renderer *renderer, Font *font, const char *s,
 
 Editor e = {0};
 
+Vec2f camera_pos = {0};
+Vec2f camera_vel = {0};
+
 #define UNHEX(color)            \
     (color) >> (0 * 8) & 0xff,  \
     (color) >> (0 * 1) & 0xff,  \
@@ -154,11 +163,14 @@ Editor e = {0};
 void render_cursor(SDL_Renderer *renderer, const Font *font)
 {
     size_t ecx_pos = (e.cx > get_line_length(&e)) ? get_line_length(&e) : e.cx;
+    Vec2f cursor_pos = vec2f(ecx_pos * FONT_CHAR_WIDTH * FONT_SCALE, 
+                       e.cy * FONT_CHAR_HEIGHT * FONT_SCALE);
 
-    const Vec2f pos = vec2f(ecx_pos * FONT_CHAR_WIDTH * FONT_SCALE, e.cy * FONT_CHAR_HEIGHT * FONT_SCALE);
+    const Vec2f cursor_render_pos = vec2f_sub(cursor_pos, camera_pos);
+
     SDL_Rect rect = {
-        .x = (int) floorf(pos.x),
-        .y = (int) floorf(pos.y),
+        .x = (int) floorf(cursor_render_pos.x),
+        .y = (int) floorf(cursor_render_pos.y),
         .w = FONT_CHAR_WIDTH * FONT_SCALE,
         .h = FONT_CHAR_HEIGHT * FONT_SCALE,
     };
@@ -170,7 +182,7 @@ void render_cursor(SDL_Renderer *renderer, const Font *font)
 
     Line *line = list_get(&e.lines, e.cy);
     if (e.cy != e.lines.length && e.cx < line->size) {
-        render_char(renderer, font, line->s[e.cx], pos, FONT_SCALE);
+        render_char(renderer, font, line->s[e.cx], cursor_render_pos, FONT_SCALE);
     }
 }
 
@@ -222,7 +234,8 @@ int main(int argc, char *argv[])
     scc(TTF_Init());
 
     SDL_Window *window = scp(
-        SDL_CreateWindow("Text Editor", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 600, SDL_WINDOW_RESIZABLE)
+        SDL_CreateWindow("Text Editor", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 
+                         SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE)
     );
 
     SDL_Renderer *renderer = scp(
@@ -235,6 +248,7 @@ int main(int argc, char *argv[])
 
     bool quit = false;
     while (!quit) {
+        const Uint32 start = SDL_GetTicks();
         SDL_Event event = {0};
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
@@ -272,16 +286,35 @@ int main(int argc, char *argv[])
             }
         }
 
+        size_t ecx_pos = (e.cx > get_line_length(&e)) ? get_line_length(&e) : e.cx;
+
+        const Vec2f cursor_pos = vec2f(ecx_pos * FONT_CHAR_WIDTH * FONT_SCALE, 
+                                       e.cy * FONT_CHAR_HEIGHT * FONT_SCALE);
+
+        camera_vel = vec2f_sub(cursor_pos, camera_pos);
+        camera_pos = vec2f_add(camera_pos, vec2f_mul(camera_vel, vec2fs(DELTA_TIME)));
+
         /*  Clear the screen */
         scc(SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0));
         scc(SDL_RenderClear(renderer));
         for (size_t i = 0; i < e.lines.length; i++) {
             Line *line = list_get(&e.lines, i);
-            render_text_sized(renderer, &font, line->s, line->size, vec2f(0.0f, i * FONT_SCALE * FONT_CHAR_HEIGHT), 0xFFFFFFFF, FONT_SCALE);
+            
+            Vec2f line_pos = vec2f_sub(
+                vec2f(0.0f, i * FONT_SCALE * FONT_CHAR_HEIGHT),
+                camera_pos
+            );
+
+            render_text_sized(renderer, &font, line->s, line->size, line_pos, 0xFFFFFFFF, FONT_SCALE);
         }
         render_cursor(renderer, &font);
 
         SDL_RenderPresent(renderer);
+
+        const Uint32 duration = (SDL_GetTicks() - start);
+        if (duration < DELTA_TIME_MS) {
+            SDL_Delay(DELTA_TIME_MS - duration);
+        }
     }
 
     SDL_Quit();
