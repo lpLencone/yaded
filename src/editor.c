@@ -193,9 +193,8 @@ static void merge_line(Editor *e)
 {
     Line *line_before = list_get(&e->lines, e->cy);
     Line *line_after = list_get(&e->lines, e->cy + 1);
-    char *s = line_after->s;
 
-    line_insert_text(line_before, s, line_before->size);
+    line_insert_text(line_before, line_after->s, line_before->size);
 
     editor_move(e, EDITOR_DOWN);
     remove_line(e);
@@ -237,8 +236,6 @@ static void save_file(Editor *e)
     c_chunk = malloc(chunk_line.count + 1);                 \
     memcpy(c_chunk, chunk_line.data, chunk_line.count);     \
     c_chunk[chunk_line.count] = '\0';                       \
-
-    
 
 static void open_file(Editor *e) 
 {   
