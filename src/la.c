@@ -1,5 +1,47 @@
 #include "la.h"
 
+/* 2-DIMENSIONAL INT VECTOR */
+
+Vec2i vec2i(int x, int y)
+{
+    return (Vec2i) {
+        .x = x,
+        .y = y,
+    };
+}
+
+Vec2i vec2is(int n)
+{
+    return vec2i(n, n);
+}
+
+Vec2i vec2i_add(Vec2i a, Vec2i b)
+{
+    return vec2i(a.x + b.x, a.y + b.y);
+}
+
+Vec2i vec2i_sub(Vec2i a, Vec2i b)
+{
+    return vec2i(a.x - b.x, a.y - b.y);
+}
+
+Vec2i vec2i_mul(Vec2i a, Vec2i b)
+{
+    return vec2i(a.x * b.x, a.y * b.y);
+}
+
+Vec2i vec2i_mul3(Vec2i a, Vec2i b, Vec2i c)
+{
+    return vec2i(a.x * b.x * c.x, a.y * b.y * c.y);
+}
+
+Vec2i vec2i_div(Vec2i a, Vec2i b)
+{
+    return vec2i(a.x / b.x, a.y / b.y);
+}
+
+/* 2-DIMENSIONAL FLOAT VECTOR */
+
 Vec2f vec2f(float x, float y)
 {
     return (Vec2f) {
@@ -36,6 +78,8 @@ Vec2f vec2f_div(Vec2f a, Vec2f b)
 {
     return vec2f(a.x / b.x, a.y / b.y);
 }
+
+/* 4-DIMENSIONAL FLOAT VECTOR */
 
 Vec4f vec4f(float x, float y, float z, float w)
 {

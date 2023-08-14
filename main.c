@@ -368,7 +368,7 @@ void gl_attr()
     printf("GL version %d.%d\n", major, minor);
 }
 
-void init_shaders(GLint *time_uniform, GLint *resolution_uniform)
+void init_shaders(GLint *time_uniform, GLint *resolution_uniform, GLint *scale_uniform)
 {
     GLuint vert_shader = 0;
     if (!compile_shader_file("./shaders/font.vert", GL_VERTEX_SHADER, &vert_shader)) {
@@ -389,8 +389,7 @@ void init_shaders(GLint *time_uniform, GLint *resolution_uniform)
 
     *time_uniform = glGetUniformLocation(program, "time");
     *resolution_uniform = glGetUniformLocation(program, "resolution");
-
-    printf("%d %d\n", *time_uniform, *resolution_uniform);
+    *scale_uniform = glGetUniformLocation(program, "scale");
 }
 
 void init_font_texture(void)
@@ -418,15 +417,13 @@ void init_font_texture(void)
 }
 
 typedef struct {
-    Vec2f pos;
-    float scale;
-    float ch;
+    Vec2i tile;
+    int ch;
     Vec4f color;
 } Glyph;
 
 typedef enum {
-    GLYPH_ATTR_POS = 0,
-    GLYPH_ATTR_SCALE,
+    GLYPH_ATTR_TILE = 0,
     GLYPH_ATTR_CH,
     GLYPH_ATTR_COLOR,
     COUNT_GLYPH_ATTRS,
@@ -435,28 +432,28 @@ typedef enum {
 typedef struct {
     size_t offset;
     size_t comps;
+    GLenum type;
 } Glyph_Attr_Def;
 
-static const Glyph_Attr_Def glyph_attr_offset_defs[COUNT_GLYPH_ATTRS] = {
-    [GLYPH_ATTR_POS]    = {
-        .offset = offsetof(Glyph, pos),
+static const Glyph_Attr_Def glyph_attr_defs[COUNT_GLYPH_ATTRS] = {
+    [GLYPH_ATTR_TILE]  = {
+        .offset = offsetof(Glyph, tile),
         .comps = 2,
+        .type = GL_INT,
     },
-    [GLYPH_ATTR_SCALE]  = {
-        .offset = offsetof(Glyph, scale),
-        .comps = 1,
-    },
-    [GLYPH_ATTR_CH]     = {
+    [GLYPH_ATTR_CH]    = {
         .offset = offsetof(Glyph, ch),
         .comps = 1,
+        .type = GL_INT,
     },
-    [GLYPH_ATTR_COLOR]  = {
+    [GLYPH_ATTR_COLOR] = {
         .offset = offsetof(Glyph, color),
         .comps = 4,
+        .type = GL_FLOAT,
     },
 };
 
-static_assert(COUNT_GLYPH_ATTRS == 4, "The amount of glyph vertex attributes has changed");
+static_assert(COUNT_GLYPH_ATTRS == 3, "The amount of glyph vertex attributes has changed");
 
 #define GLYPH_BUFFER_CAPACITY   1024
 
@@ -476,12 +473,31 @@ void init_buffers(void)
 
     for (Glyph_Attr attr = 0; attr < COUNT_GLYPH_ATTRS; attr++) {
         glEnableVertexAttribArray(attr);
-        glVertexAttribPointer(
-            attr,
-            glyph_attr_offset_defs[attr].comps, 
-            GL_FLOAT, GL_FALSE, sizeof(Glyph), 
-            (void *) glyph_attr_offset_defs[attr].offset
-        );
+        switch (glyph_attr_defs[attr].type) {
+            case GL_FLOAT: {
+                glVertexAttribPointer(
+                    attr,
+                    glyph_attr_defs[attr].comps, 
+                    glyph_attr_defs[attr].type, 
+                    GL_FALSE, sizeof(Glyph), 
+                    (void *) glyph_attr_defs[attr].offset
+                );
+            } break;
+
+            case GL_INT: {
+                glVertexAttribIPointer(
+                    attr,
+                    glyph_attr_defs[attr].comps,
+                    glyph_attr_defs[attr].type,
+                    sizeof(Glyph),
+                    (void *) glyph_attr_defs[attr].offset
+                );
+            } break;
+            
+            default:
+                assert(false && "Unreachable");
+                exit(1); // why would anyone disable assert though?
+        }
         glVertexAttribDivisor(attr, 1);
     }
 }
@@ -490,12 +506,6 @@ void glyph_buffer_push(Glyph glyph)
 {
     assert(glyph_buffer_count < GLYPH_BUFFER_CAPACITY);
     glyph_buffer[glyph_buffer_count++] = glyph;
-
-    printf("(%5.1f, %5.1f)   %-7.1f   %-7.1f (%3.1f, %3.1f, %3.1f, %3.1f)\n", 
-           glyph.pos.x, glyph.pos.y,
-           glyph.scale,
-           glyph.ch,
-           glyph.color.x, glyph.color.y, glyph.color.z, glyph.color.w);
 }
 
 void glyph_buffer_sync(void)
@@ -506,16 +516,12 @@ void glyph_buffer_sync(void)
                     glyph_buffer);
 }
 
-void gl_render_text(const char *s, size_t slen, Vec2f pos, float scale, Vec4f color)
+void gl_render_text(const char *s, size_t slen, Vec2i tile, Vec4f color)
 {
     for (size_t i = 0; i < slen; i++) {
-        const Vec2f char_size = vec2f(FONT_CHAR_WIDTH, FONT_CHAR_HEIGHT);
         Glyph glyph = {
-            .pos   = vec2f_add(pos, vec2f_mul3(char_size,
-                                               vec2f(i, 0.0f), 
-                                               vec2fs(scale))),
-            .scale = scale,
-            .ch    = (float) s[i],
+            .tile  = vec2i_add(tile, vec2i(i, 0)),
+            .ch    = s[i],
             .color = color
         };
         glyph_buffer_push(glyph);
@@ -564,14 +570,20 @@ int main(void)
 
     GLint time_uniform = 0;
     GLint resolution_uniform = 0;
-    init_shaders(&time_uniform, &resolution_uniform);
+    GLint scale_uniform = 0;
+    init_shaders(&time_uniform, &resolution_uniform, &scale_uniform);
     glUniform2f(resolution_uniform, SCREEN_WIDTH, SCREEN_HEIGHT);
+    glUniform2f(scale_uniform, 3.0f, 3.0f);
 
     init_font_texture();
     init_buffers();
 
     const char *s = "Hello, World!";
-    gl_render_text(s, strlen(s), vec2fs(0.0f), 3.0f, vec4f(1.0f, 0.0f, 0.0f, 1.0f));
+    gl_render_text(s, strlen(s), vec2is(0), vec4f(1.0f, 0.0f, 0.0f, 1.0f));
+    glyph_buffer_sync();
+
+    s = "Foo Bar";
+    gl_render_text(s, strlen(s), vec2i(0, 1), vec4f(0.0f, 1.0f, 0.0f, 1.0f));
     glyph_buffer_sync();
 
     bool quit = false;
@@ -582,7 +594,19 @@ int main(void)
                 case SDL_QUIT: {
                     quit = true;
                 } break;
+
+                case SDL_WINDOWEVENT_RESIZED:
+                case SDL_WINDOWEVENT_SIZE_CHANGED: {
+                    // Doesn't ever get here at all
+                }
             }
+        }
+
+        {
+            int w, h;
+            SDL_GetWindowSize(window, &w, &h);
+            glViewport(0, 0, w, h);
+            glUniform2f(resolution_uniform, (float) w, (float) h);
         }
 
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
