@@ -13,6 +13,7 @@
 
 #include "la.h"
 #include "editor.h"
+#include "gl_extra.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -57,6 +58,7 @@ SDL_Surface *surface_from_file(const char *filename)
     unsigned char *pixels = stbi_load(filename, &width, &height, &n, STBI_rgb_alpha);
     if (pixels == NULL) {
         fprintf(stderr, "ERROR: could not load file %s: %s\n", filename, stbi_failure_reason());
+        exit(1);
     }
 
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
@@ -234,7 +236,6 @@ EditorKeys find_key(int code) {
     assert(0);
 }
 
-
 #ifndef OPENGL_RENDERER
 
 int main(int argc, char *argv[])
@@ -245,7 +246,6 @@ int main(int argc, char *argv[])
     }
 
     scc(SDL_Init(SDL_INIT_VIDEO));
-    scc(TTF_Init());
 
     SDL_Window *window = scp(
         SDL_CreateWindow("Text Editor", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 
@@ -368,6 +368,160 @@ void gl_attr()
     printf("GL version %d.%d\n", major, minor);
 }
 
+void init_shaders(GLint *time_uniform, GLint *resolution_uniform)
+{
+    GLuint vert_shader = 0;
+    if (!compile_shader_file("./shaders/font.vert", GL_VERTEX_SHADER, &vert_shader)) {
+        exit(1);
+    };
+
+    GLuint frag_shader = 0;
+    if (!compile_shader_file("./shaders/font.frag", GL_FRAGMENT_SHADER, &frag_shader)) {
+        exit(1);
+    };
+
+    GLuint program = 0;
+    if (!link_program(vert_shader, frag_shader, &program)) {
+        exit(1);
+    }
+
+    glUseProgram(program);
+
+    *time_uniform = glGetUniformLocation(program, "time");
+    *resolution_uniform = glGetUniformLocation(program, "resolution");
+
+    printf("%d %d\n", *time_uniform, *resolution_uniform);
+}
+
+void init_font_texture(void)
+{
+    const char *filename = "charmap-oldschool_white.png";
+    int width, height, n;
+    unsigned char *pixels = stbi_load(filename, &width, &height, &n, STBI_rgb_alpha);
+    if (pixels == NULL) {
+        fprintf(stderr, "ERROR: could not load file %s: %s\n", filename, stbi_failure_reason());
+        exit(1);
+    }
+
+    GLuint font_texture = 0;
+    glActiveTexture(GL_TEXTURE0);
+    glGenTextures(1, &font_texture);
+    glBindTexture(GL_TEXTURE_2D, font_texture);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 
+                 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+}
+
+typedef struct {
+    Vec2f pos;
+    float scale;
+    float ch;
+    Vec4f color;
+} Glyph;
+
+typedef enum {
+    GLYPH_ATTR_POS = 0,
+    GLYPH_ATTR_SCALE,
+    GLYPH_ATTR_CH,
+    GLYPH_ATTR_COLOR,
+    COUNT_GLYPH_ATTRS,
+} Glyph_Attr;
+
+typedef struct {
+    size_t offset;
+    size_t comps;
+} Glyph_Attr_Def;
+
+static const Glyph_Attr_Def glyph_attr_offset_defs[COUNT_GLYPH_ATTRS] = {
+    [GLYPH_ATTR_POS]    = {
+        .offset = offsetof(Glyph, pos),
+        .comps = 2,
+    },
+    [GLYPH_ATTR_SCALE]  = {
+        .offset = offsetof(Glyph, scale),
+        .comps = 1,
+    },
+    [GLYPH_ATTR_CH]     = {
+        .offset = offsetof(Glyph, ch),
+        .comps = 1,
+    },
+    [GLYPH_ATTR_COLOR]  = {
+        .offset = offsetof(Glyph, color),
+        .comps = 4,
+    },
+};
+
+static_assert(COUNT_GLYPH_ATTRS == 4, "The amount of glyph vertex attributes has changed");
+
+#define GLYPH_BUFFER_CAPACITY   1024
+
+Glyph glyph_buffer[GLYPH_BUFFER_CAPACITY];
+size_t glyph_buffer_count = 0;
+
+void init_buffers(void)
+{
+    GLuint vao = 0;
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao);
+
+    GLuint vbo = 0;
+    glGenBuffers(1, &vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(glyph_buffer), glyph_buffer, GL_DYNAMIC_DRAW);
+
+    for (Glyph_Attr attr = 0; attr < COUNT_GLYPH_ATTRS; attr++) {
+        glEnableVertexAttribArray(attr);
+        glVertexAttribPointer(
+            attr,
+            glyph_attr_offset_defs[attr].comps, 
+            GL_FLOAT, GL_FALSE, sizeof(Glyph), 
+            (void *) glyph_attr_offset_defs[attr].offset
+        );
+        glVertexAttribDivisor(attr, 1);
+    }
+}
+
+void glyph_buffer_push(Glyph glyph)
+{
+    assert(glyph_buffer_count < GLYPH_BUFFER_CAPACITY);
+    glyph_buffer[glyph_buffer_count++] = glyph;
+
+    printf("(%5.1f, %5.1f)   %-7.1f   %-7.1f (%3.1f, %3.1f, %3.1f, %3.1f)\n", 
+           glyph.pos.x, glyph.pos.y,
+           glyph.scale,
+           glyph.ch,
+           glyph.color.x, glyph.color.y, glyph.color.z, glyph.color.w);
+}
+
+void glyph_buffer_sync(void)
+{
+    glBufferSubData(GL_ARRAY_BUFFER, 
+                    0, 
+                    glyph_buffer_count * sizeof(Glyph), 
+                    glyph_buffer);
+}
+
+void gl_render_text(const char *s, size_t slen, Vec2f pos, float scale, Vec4f color)
+{
+    for (size_t i = 0; i < slen; i++) {
+        const Vec2f char_size = vec2f(FONT_CHAR_WIDTH, FONT_CHAR_HEIGHT);
+        Glyph glyph = {
+            .pos   = vec2f_add(pos, vec2f_mul3(char_size,
+                                               vec2f(i, 0.0f), 
+                                               vec2fs(scale))),
+            .scale = scale,
+            .ch    = (float) s[i],
+            .color = color
+        };
+        glyph_buffer_push(glyph);
+    }
+}
+
 int main(void)
 {
     scc(SDL_Init(SDL_INIT_VIDEO));
@@ -388,6 +542,16 @@ int main(void)
         exit(1);
     }
 
+    if (!GLEW_ARB_draw_instanced) {
+        fprintf(stderr, "ARB_draw_instanced is not supported; game may not work properly.\n");
+        exit(1);
+    }
+
+    if (!GLEW_ARB_instanced_arrays) {
+        fprintf(stderr, "ARB_instaced_arrays is not supported; game may not work properly.\n");
+        exit(1);
+    }
+
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -396,6 +560,39 @@ int main(void)
         glDebugMessageCallback(MessageCallback, 0);
     } else {
         fprintf(stderr, "WARNING! GLEW_ARB_debug_output is not available\n");
+    }
+
+    GLint time_uniform = 0;
+    GLint resolution_uniform = 0;
+    init_shaders(&time_uniform, &resolution_uniform);
+    glUniform2f(resolution_uniform, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+    init_font_texture();
+    init_buffers();
+
+    const char *s = "Hello, World!";
+    gl_render_text(s, strlen(s), vec2fs(0.0f), 3.0f, vec4f(1.0f, 0.0f, 0.0f, 1.0f));
+    glyph_buffer_sync();
+
+    bool quit = false;
+    while (!quit) {
+        SDL_Event event;
+        while (SDL_PollEvent(&event)) {
+            switch (event.type) {
+                case SDL_QUIT: {
+                    quit = true;
+                } break;
+            }
+        }
+
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        glUniform1f(time_uniform, (float) SDL_GetTicks() / 1000.0f);
+
+        glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, glyph_buffer_count);
+
+        SDL_GL_SwapWindow(window);
     }
 
     return 0;
