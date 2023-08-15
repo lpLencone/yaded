@@ -26,6 +26,11 @@ float map01(float x) {
     return (x + 1) / 2;
 }
 
+float map04(float x) {
+    // -2.0 .. 2.0 ==> 0.0 .. 1.0
+    return (x + 2) / 4;
+}
+
 vec3 hsl2rgb(vec3 c) {
     vec3 rgb = clamp(
         abs(mod(6.0 * c.x + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
@@ -51,13 +56,30 @@ void main() {
     vec2 frag_uv = gl_FragCoord.xy / resolution;
     vec4 rainbow = vec4(
         hsl2rgb(
-            vec3(
-                time + frag_uv.x * frag_uv.y, 
-                map01(sin(time + frag_uv.x * frag_uv.y)), 
-                map01(cos(time + sin(10 * frag_uv.x) + cos(10 * frag_uv.y)))
-            )
+            vec3(0.5 * time + frag_uv.x * frag_uv.y * (sin(x) + cos(y)), 
+                 0.5, 0.5)
         ), 
-        1.0);
+        1.0
+    );
 
     gl_FragColor = glyph_bg_color * (1.0 - tc.x) + tc.x * glyph_fg_color * rainbow;
 }
+
+// vec4 rainbow = vec4(
+//         hsl2rgb(
+//             vec3(
+//                 time + frag_uv.x * frag_uv.y, 
+//                 map01(sin((x / 5) * time + frag_uv.x * frag_uv.y)), 
+//                 map01(cos((y / 5) * time + sin(10 * frag_uv.x) + cos(10 * frag_uv.y)))
+//             )
+//         ), 
+//         1.0
+//     );
+
+// vec4 rainbow = vec4(
+//         hsl2rgb(
+//             vec3(0.5 * time + frag_uv.x * frag_uv.y * (sin(x) + cos(y)), 
+//                  0.5, 0.5)
+//         ), 
+//         1.0
+//     );
