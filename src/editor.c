@@ -9,6 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/stat.h>
+
 
 #define SV_IMPLEMENTATION
 #include "sv.h"
@@ -33,16 +35,16 @@ Editor editor_init(const char *filename)
     Editor e;
     e.cx = 0;
     e.cy = 0;
+    e.filename = filename;
     
     e.lines = list_init();
     Line line = line_init();
     list_append(&e.lines, &line, sizeof(line));
 
-    if (filename != NULL) {
-        e.filename = filename;
+    struct stat buffer;
+
+    if (e.filename != NULL && stat(filename, &buffer) == 0) {
         open_file(&e);
-    } else {
-        e.filename = NULL;
     }
 
     return e;
