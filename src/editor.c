@@ -75,6 +75,14 @@ void editor_process_key(Editor *e, EditorKeys key)
     }
 }
 
+void editor_click(Editor *e, size_t x, size_t y)
+{
+    if (y < e->lines.length) {
+        e->cy = y;
+        e->cx = x;
+    }
+}
+
 void editor_insert_text(Editor *e, const char *s)
 {
     Line *line = list_get(&e->lines, e->cy);

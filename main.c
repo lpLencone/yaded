@@ -24,13 +24,13 @@
 #define DELTA_TIME          (1.0f / FPS)
 #define DELTA_TIME_MS       (1000 / FPS)
 
-#define FONT_WIDTH          128
-#define FONT_HEIGHT         64
-#define FONT_COLS           18
-#define FONT_ROWS           7
-#define FONT_CHAR_WIDTH     (int) (FONT_WIDTH  / FONT_COLS)
-#define FONT_CHAR_HEIGHT    (int) (FONT_HEIGHT / FONT_ROWS)
-#define FONT_SCALE          2.0f
+#define FONT_WIDTH          128.0f
+#define FONT_HEIGHT         64.0f
+#define FONT_COLS           18.0f
+#define FONT_ROWS           7.0f
+#define FONT_CHAR_WIDTH     (FONT_WIDTH  / FONT_COLS)
+#define FONT_CHAR_HEIGHT    (FONT_HEIGHT / FONT_ROWS)
+#define FONT_SCALE          3.0f
 
 // SDL check codes
 void scc(int code)
@@ -51,6 +51,8 @@ void *scp(void *ptr)
 
     return ptr;
 }
+
+#ifndef OPENGL_RENDERER
 
 SDL_Surface *surface_from_file(const char *filename)
 {
@@ -205,8 +207,8 @@ void render_cursor(SDL_Window *window, SDL_Renderer *renderer, const Font *font,
     // ABGR
     set_texture_color(font->spritesheet, 0xFF000000);
 
-    Line *line = list_get(&e.lines, e.cy);
     if (e.cy != e.lines.length && e.cx < line->size) {
+        const Line *line = list_get(&e.lines, e.cy);
         render_char(renderer, font, line->s[e.cx], cursor_render_pos, scale);
     }
 }
@@ -236,7 +238,6 @@ EditorKeys find_key(int code) {
     assert(0);
 }
 
-#ifndef OPENGL_RENDERER
 
 int main(int argc, char *argv[])
 {
@@ -368,7 +369,8 @@ void gl_attr()
     printf("GL version %d.%d\n", major, minor);
 }
 
-void init_shaders(GLint *time_uniform, GLint *resolution_uniform, GLint *scale_uniform)
+void init_shaders(GLint *time_uniform, GLint *resolution_uniform, GLint *scale_uniform,
+                  GLint *camera_uniform)
 {
     GLuint vert_shader = 0;
     if (!compile_shader_file("./shaders/font.vert", GL_VERTEX_SHADER, &vert_shader)) {
@@ -390,6 +392,7 @@ void init_shaders(GLint *time_uniform, GLint *resolution_uniform, GLint *scale_u
     *time_uniform = glGetUniformLocation(program, "time");
     *resolution_uniform = glGetUniformLocation(program, "resolution");
     *scale_uniform = glGetUniformLocation(program, "scale");
+    *camera_uniform = glGetUniformLocation(program, "camera");
 }
 
 void init_font_texture(void)
@@ -508,7 +511,7 @@ void init_buffers(void)
     }
 }
 
-void glyph_buffer_clear()
+void glyph_buffer_clear(void)
 {
     glyph_buffer_count = 0;
 }
@@ -541,12 +544,56 @@ void gl_render_text(const char *s, Vec2i tile, Vec4f fg_color, Vec4f bg_color)
     }
 }
 
+void gl_render_cursor(Editor *e)
+{
+    const Line *line = list_get(&e->lines, e->cy);
+    char c[2] = {0};
+    size_t ecx;
+    if (e->cx < line->size) {
+        c[0] = line->s[e->cx];
+        ecx = e->cx;
+    } else {
+        c[0] = ' ';
+        ecx = line->size;
+    }
+
+    gl_render_text(c, vec2i(ecx, -e->cy), vec4fs(0.0f), vec4fs(1.0f));
+}
+
+
+const int keymap[] = {
+    SDLK_LEFT,
+    SDLK_RIGHT,
+    SDLK_UP,
+    SDLK_DOWN,
+    SDLK_HOME,
+    SDLK_END,
+    SDLK_PAGEUP,
+    SDLK_PAGEDOWN,
+    SDLK_BACKSPACE,
+    SDLK_DELETE,
+    SDLK_RETURN,
+    SDLK_TAB,
+    SDLK_F3,
+};
+
+const size_t keymap_size = sizeof(keymap) / sizeof(keymap[0]);
+
+EditorKeys find_key(int code) {
+    for (size_t i = 0; i < keymap_size; i++) {
+        if (keymap[i] == code) return i;
+    }
+    assert(0);
+}
+
 int main(int argc, char *argv[])
 {
     GLint time_uniform = 0;
     GLint resolution_uniform = 0;
     GLint scale_uniform = 0;
+    GLint camera_uniform = 0;
     SDL_Window *window;
+    
     {
         scc(SDL_Init(SDL_INIT_VIDEO));
 
@@ -586,9 +633,9 @@ int main(int argc, char *argv[])
             fprintf(stderr, "WARNING! GLEW_ARB_debug_output is not available\n");
         }
 
-        init_shaders(&time_uniform, &resolution_uniform, &scale_uniform);
+        init_shaders(&time_uniform, &resolution_uniform, &scale_uniform, &camera_uniform);
         glUniform2f(resolution_uniform, SCREEN_WIDTH, SCREEN_HEIGHT);
-        glUniform2f(scale_uniform, 3.0f, 3.0f);
+        glUniform2f(scale_uniform, FONT_SCALE, FONT_SCALE);
 
         init_font_texture();
         init_buffers();
@@ -599,11 +646,16 @@ int main(int argc, char *argv[])
         filename = argv[1];
     }
 
-    e = editor_init(filename);
+    Editor e = editor_init(filename);
+    Vec2f camera_pos = {0};
+    Vec2f camera_vel = {0};
+    float camera_scale = FONT_SCALE;
 
     bool quit = false;
     while (!quit) {
-        SDL_Event event;
+        const Uint32 start = SDL_GetTicks();
+
+        SDL_Event event = {0};
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
                 case SDL_QUIT: {
@@ -633,6 +685,37 @@ int main(int argc, char *argv[])
                 case SDL_TEXTINPUT: {
                     editor_insert_text(&e, event.text.text);
                 } break;
+
+                case SDL_MOUSEBUTTONDOWN: {
+                    Vec2f mouse_coord = vec2f((float) event.button.x, (float) event.button.y);
+
+                    switch (event.button.button) {
+                        case SDL_BUTTON_LEFT: {
+                            int w, h;
+                            SDL_GetWindowSize(window, &w, &h);
+                            Vec2f cursor_coord = vec2f_add(
+                                mouse_coord, 
+                                vec2f_sub(camera_pos, vec2f((float) w / 2, (float) h / 2))
+                            );
+                            int truex = (int) floorf(cursor_coord.x / ((float) FONT_CHAR_WIDTH * camera_scale));
+                            if (truex < 0) {
+                                truex = 0;
+                            }
+                            int truey = (int) floorf(cursor_coord.y / ((float) FONT_CHAR_HEIGHT * camera_scale)) + 1;
+                            if (truey < 0) {
+                                truey = 0;
+                            }
+
+                            editor_click(&e, (size_t) truex, (size_t) truey);
+                        } break;
+                    }
+                } break;
+
+                case SDL_MOUSEWHEEL: {
+                    camera_scale *= (event.wheel.y > 0) ? 1.05 : 0.95;
+                    assert(camera_scale > 0);
+                    glUniform2f(scale_uniform, camera_scale, camera_scale);
+                } break;
             }
         }
 
@@ -643,7 +726,6 @@ int main(int argc, char *argv[])
             glUniform2f(resolution_uniform, (float) w, (float) h);
         }
 
-        const float camera_scale = FONT_SCALE;
         const Vec2f cursor_pos = vec2f(e.cx * FONT_CHAR_WIDTH  * camera_scale, 
                                        e.cy * FONT_CHAR_HEIGHT * camera_scale);
 
@@ -661,8 +743,19 @@ int main(int argc, char *argv[])
         glyph_buffer_sync();
 
         glUniform1f(time_uniform, (float) SDL_GetTicks() / 1000.0f);
+        glUniform2f(camera_uniform, camera_pos.x, -camera_pos.y);
 
         glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, glyph_buffer_count);
+
+        glyph_buffer_clear();
+        gl_render_cursor(&e);
+        glyph_buffer_sync();
+        glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, glyph_buffer_count);
+
+        const Uint32 duration = (SDL_GetTicks() - start);
+        if (duration < DELTA_TIME_MS) {
+            SDL_Delay(DELTA_TIME_MS - duration);
+        }
 
         SDL_GL_SwapWindow(window);
     }

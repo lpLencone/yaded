@@ -34,6 +34,7 @@ Editor editor_init(const char *filename);
 void editor_insert_text(Editor *e, const char *s);
 void editor_delete_char(Editor *e);
 void editor_process_key(Editor *e, EditorKeys key);
+void editor_click(Editor *e, size_t x, size_t y);
 
 size_t get_line_length(Editor *e);
 void editor_new_line(Editor *e);
