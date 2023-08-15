@@ -605,7 +605,6 @@ int main(int argc, char *argv[])
 
     e = editor_init(filename);
 
-
     bool quit = false;
     while (!quit) {
         SDL_Event event;
@@ -615,25 +614,29 @@ int main(int argc, char *argv[])
                     quit = true;
                 } break;
 
-                // case SDL_KEYDOWN: {
-                //     switch (event.key.keysym.sym) {
-                //         case SDLK_BACKSPACE: 
-                //         case SDLK_DELETE: 
-                //         case SDLK_RETURN: 
-                //         case SDLK_TAB: 
-                //         case SDLK_F3:
-                //         case SDLK_LEFT:
-                //         case SDLK_RIGHT: 
-                //         case SDLK_UP:
-                //         case SDLK_DOWN:
-                //         case SDLK_HOME: 
-                //         case SDLK_END:
-                //         case SDLK_PAGEUP:
-                //         case SDLK_PAGEDOWN: {
-                //             editor_process_key(&e, find_key(event.key.keysym.sym));
-                //         }
-                //     }
-                // } break;
+                case SDL_KEYDOWN: {
+                    switch (event.key.keysym.sym) {
+                        case SDLK_BACKSPACE: 
+                        case SDLK_DELETE: 
+                        case SDLK_RETURN: 
+                        case SDLK_TAB: 
+                        case SDLK_F3:
+                        case SDLK_LEFT:
+                        case SDLK_RIGHT: 
+                        case SDLK_UP:
+                        case SDLK_DOWN:
+                        case SDLK_HOME: 
+                        case SDLK_END:
+                        case SDLK_PAGEUP:
+                        case SDLK_PAGEDOWN: {
+                            editor_process_key(&e, find_key(event.key.keysym.sym));
+                        }
+                    }
+                } break;
+
+                case SDL_TEXTINPUT: {
+                    editor_insert_text(&e, event.text.text);
+                } break;
             }
         }
 
@@ -644,11 +647,22 @@ int main(int argc, char *argv[])
             glUniform2f(resolution_uniform, (float) w, (float) h);
         }
 
+        const float camera_scale = FONT_SCALE;
+        const Vec2f cursor_pos = vec2f(e.cx * FONT_CHAR_WIDTH  * camera_scale, 
+                                       e.cy * FONT_CHAR_HEIGHT * camera_scale);
+
+        camera_vel = vec2f_mul(vec2f_sub(cursor_pos, camera_pos), vec2fs(2.0f));
+        camera_pos = vec2f_add(camera_pos, vec2f_mul(camera_vel, vec2fs(DELTA_TIME)));
+
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        glUniform1f(time_uniform, (float) SDL_GetTicks() / 1000.0f);
+        for (size_t cy = 0; cy < e.lines.length; cy++) {
+            const Line *line = list_get(&e.lines, cy);
+            gl_render_text(line->s, vec2i(0, -cy), vec4fs(1.0f), vec4fs(0.0f));
+        }
 
+        glUniform1f(time_uniform, (float) SDL_GetTicks() / 1000.0f);
         glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, glyph_buffer_count);
 
         SDL_GL_SwapWindow(window);
