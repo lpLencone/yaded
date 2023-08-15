@@ -462,8 +462,7 @@ static const Glyph_Attr_Def glyph_attr_defs[COUNT_GLYPH_ATTRS] = {
 
 static_assert(COUNT_GLYPH_ATTRS == 4, "The amount of glyph vertex attributes has changed");
 
-#define GLYPH_BUFFER_CAPACITY   1024
-
+#define GLYPH_BUFFER_CAPACITY   (1024 * 1024)
 Glyph glyph_buffer[GLYPH_BUFFER_CAPACITY];
 size_t glyph_buffer_count = 0;
 
@@ -507,6 +506,11 @@ void init_buffers(void)
         }
         glVertexAttribDivisor(attr, 1);
     }
+}
+
+void glyph_buffer_clear()
+{
+    glyph_buffer_count = 0;
 }
 
 void glyph_buffer_push(Glyph glyph)
@@ -588,14 +592,6 @@ int main(int argc, char *argv[])
 
         init_font_texture();
         init_buffers();
-
-        const char *s = "Hello, World!";
-        gl_render_text(s, vec2is(0), vec4f(1.0f, 0.0f, 0.0f, 1.0f), vec4fs(1.0f));
-        glyph_buffer_sync();
-
-        s = "Foo Bar";
-        gl_render_text(s, vec2i(0, 1), vec4f(0.0f, 1.0f, 0.0f, 1.0f), vec4fs(0.0f));
-        glyph_buffer_sync();
     }
 
     char *filename = NULL;
@@ -657,12 +653,15 @@ int main(int argc, char *argv[])
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
+        glyph_buffer_clear();
         for (size_t cy = 0; cy < e.lines.length; cy++) {
             const Line *line = list_get(&e.lines, cy);
             gl_render_text(line->s, vec2i(0, -cy), vec4fs(1.0f), vec4fs(0.0f));
         }
+        glyph_buffer_sync();
 
         glUniform1f(time_uniform, (float) SDL_GetTicks() / 1000.0f);
+
         glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, glyph_buffer_count);
 
         SDL_GL_SwapWindow(window);

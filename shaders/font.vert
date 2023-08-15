@@ -9,6 +9,7 @@
 
 uniform vec2 resolution;
 uniform vec2 scale;
+uniform float time;
 
 layout(location = 0) in ivec2   tile;
 layout(location = 1) in int     ch;
@@ -28,11 +29,12 @@ vec2 project_point(vec2 point)
 void main() {
     uv = vec2(float(gl_VertexID & 1), float((gl_VertexID >> 1) & 1));
     vec2 char_size = vec2(float(FONT_CHAR_WIDTH), float(FONT_CHAR_HEIGHT));
-    vec2 pos = tile * char_size * scale;
+    vec2 shaking = vec2(sin(time), cos(time));
+    vec2 pos = tile * char_size * scale * shaking;
+
     gl_Position = vec4(project_point(uv * char_size * scale + pos), 0.0, 1.0);
 
     glyph_ch = ch;
-
     glyph_fg_color = fg_color;
     glyph_bg_color = bg_color;
 }
