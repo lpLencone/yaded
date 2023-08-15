@@ -1,11 +1,19 @@
-#include "glyph.h"
 #include "tile_glyph.h"
 #include "stb_image.h"
 
 #include <assert.h>
 #include <string.h>
 #include <stdlib.h>
-#define TILE_GLYPH_BUFFER_CAPACITY (1024 * 1024)
+
+#define TILE_GLYPH_BUFFER_CAPACITY (512 * 1024)
+
+typedef enum {
+    TILE_GLYPH_ATTR_TILE = 0,
+    TILE_GLYPH_ATTR_CH,
+    TILE_GLYPH_ATTR_FG_COLOR,
+    TILE_GLYPH_ATTR_BG_COLOR,
+    COUNT_TILE_GLYPH_ATTRS,
+} Tile_Glyph_Attr;
 
 static const Attr_Def glyph_attr_defs[COUNT_TILE_GLYPH_ATTRS] = {
     [TILE_GLYPH_ATTR_TILE]  = {
@@ -30,17 +38,25 @@ static const Attr_Def glyph_attr_defs[COUNT_TILE_GLYPH_ATTRS] = {
     },
 };
 
-static Tile_Glyph tile_glyph_buffer[TILE_GLYPH_BUFFER_CAPACITY];
-static size_t tile_glyph_buffer_count = 0;
-
 static_assert(COUNT_TILE_GLYPH_ATTRS == 4, "The amount of glyph vertex attributes has changed");
 
-static void     load_texture_atlas(const char *filename);
-static GLuint   init_shaders(const char *vert_filename, const char *frag_filename);
+static void load_texture_atlas(const char *filename);
+static void init_shaders(Tile_Glyph_Renderer *tgr, const char *vert_filename, 
+                         const char *frag_filename);
 
-void tile_glyph_buffer_init(Glyph_Uniform *tgu, const char *atlas_filename, 
-                            const char *vert_filename, const char *frag_filename)
+static void tile_glyph_buffer_push(Tile_Glyph_Renderer * tgr, Tile_Glyph glyph);
+
+Tile_Glyph_Renderer tile_glyph_renderer_init(
+    const char *atlas_filename, const char *vert_filename, 
+    const char *frag_filename)
 {
+    Tile_Glyph_Renderer tgr = {
+        .time = 0, .resolution = 0, .scale = 0, .camera = 0,
+        .buffer_count = 0, .buffer_capacity = TILE_GLYPH_BUFFER_CAPACITY
+    };
+
+    tgr.buffer = calloc(TILE_GLYPH_BUFFER_CAPACITY, sizeof(Tile_Glyph));
+
     GLuint vao = 0;
     glGenVertexArrays(1, &vao);
     glBindVertexArray(vao);
@@ -48,7 +64,7 @@ void tile_glyph_buffer_init(Glyph_Uniform *tgu, const char *atlas_filename,
     GLuint vbo = 0;
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(tile_glyph_buffer), tile_glyph_buffer, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(Tile_Glyph) * tgr.buffer_capacity, tgr.buffer, GL_DYNAMIC_DRAW);
 
     for (Tile_Glyph_Attr attr = 0; attr < COUNT_TILE_GLYPH_ATTRS; attr++) {
         glEnableVertexAttribArray(attr);
@@ -81,37 +97,25 @@ void tile_glyph_buffer_init(Glyph_Uniform *tgu, const char *atlas_filename,
     }
 
     load_texture_atlas(atlas_filename);
-    GLuint program = init_shaders(vert_filename, frag_filename);
+    init_shaders(&tgr, vert_filename, frag_filename);
 
-    glUseProgram(program);
-
-    tgu->time = glGetUniformLocation(program, "time");
-    tgu->resolution = glGetUniformLocation(program, "resolution");
-    tgu->scale = glGetUniformLocation(program, "scale");
-    tgu->camera = glGetUniformLocation(program, "camera");
+    return tgr;
 }
 
-void tile_glyph_buffer_clear(void)
+void tile_glyph_buffer_clear(Tile_Glyph_Renderer *tgr)
 {
-    tile_glyph_buffer_count = 0;
+    tgr->buffer_count = 0;
 }
 
-void tile_glyph_buffer_push(Tile_Glyph glyph)
-{
-    assert(tile_glyph_buffer_count < TILE_GLYPH_BUFFER_CAPACITY);
-    tile_glyph_buffer[tile_glyph_buffer_count++] = glyph;
-}
-
-void tile_glyph_buffer_sync(void)
+void tile_glyph_buffer_sync(Tile_Glyph_Renderer *tgr)
 {
     glBufferSubData(GL_ARRAY_BUFFER, 
                     0, 
-                    tile_glyph_buffer_count * sizeof(Tile_Glyph), 
-                    tile_glyph_buffer);
+                    tgr->buffer_count * sizeof(Tile_Glyph), 
+                    tgr->buffer);
 }
 
-
-void tile_glyph_render_text(const char *s, Vec2i tile, Vec4f fg_color, Vec4f bg_color)
+void tile_glyph_render_text(Tile_Glyph_Renderer *tgr, const char *s, Vec2i tile, Vec4f fg_color, Vec4f bg_color)
 {
     size_t slen = strlen(s);
     for (size_t i = 0; i < slen; i++) {
@@ -121,16 +125,21 @@ void tile_glyph_render_text(const char *s, Vec2i tile, Vec4f fg_color, Vec4f bg_
             .fg_color   = fg_color,
             .bg_color   = bg_color,
         };
-        tile_glyph_buffer_push(glyph);
+        tile_glyph_buffer_push(tgr, glyph);
     }
 }
 
-void tile_glyph_draw(void)
+void tile_glyph_draw(Tile_Glyph_Renderer *tgr)
 {
-    glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, tile_glyph_buffer_count);
+    glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, tgr->buffer_count);
 }
 
 /* static */
+static void tile_glyph_buffer_push(Tile_Glyph_Renderer *tgr, Tile_Glyph glyph)
+{
+    assert(tgr->buffer_count < tgr->buffer_capacity);
+    tgr->buffer[tgr->buffer_count++] = glyph;
+}
 
 static void load_texture_atlas(const char *filename)
 {
@@ -156,7 +165,7 @@ static void load_texture_atlas(const char *filename)
 }
 
 
-static GLuint init_shaders(const char *vert_filename, const char *frag_filename)
+static void init_shaders(Tile_Glyph_Renderer *tgr, const char *vert_filename, const char *frag_filename)
 {
     GLuint vert_shader = 0;
     if (!compile_shader_file(vert_filename, GL_VERTEX_SHADER, &vert_shader)) {
@@ -173,7 +182,12 @@ static GLuint init_shaders(const char *vert_filename, const char *frag_filename)
         exit(1);
     }
 
-    return program;
+    glUseProgram(program);
+
+    tgr->time = glGetUniformLocation(program, "time");
+    tgr->resolution = glGetUniformLocation(program, "resolution");
+    tgr->scale = glGetUniformLocation(program, "scale");
+    tgr->camera = glGetUniformLocation(program, "camera");
 }
 
 

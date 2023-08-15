@@ -9,11 +9,11 @@
 #define GL_GLEXT_PROTOTYPES
 #include <SDL2/SDL_opengl.h>
 
-#define OPENGL_RENDERER
-
 #include "la.h"
 #include "editor.h"
 #include "gl_extra.h"
+
+#define TILE_GLYPH_BUFFER_CAPACITY (1024)
 #include "tile_glyph.h"
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -117,7 +117,7 @@ typedef struct {
     Vec4f bg_color;
 } FreeType_Glyph;
 
-void gl_render_cursor(Editor *e)
+void gl_render_cursor(Tile_Glyph_Renderer *tgr, Editor *e)
 {
     const Line *line = list_get(&e->lines, e->cy);
     char c[2] = {0};
@@ -130,7 +130,7 @@ void gl_render_cursor(Editor *e)
         ecx = line->size;
     }
 
-    tile_glyph_render_text(c, vec2i(ecx, -e->cy), vec4fs(0.0f), vec4fs(1.0f));
+    tile_glyph_render_text(tgr, c, vec2i(ecx, -e->cy), vec4fs(0.0f), vec4fs(1.0f));
 }
 
 const int keymap[] = {
@@ -160,33 +160,24 @@ EditorKeys find_key(int code) {
 
 int main(int argc, char *argv[])
 {
-    Glyph_Uniform tgu = {
-        .time = 0,
-        .resolution = 0,
-        .scale = 0,
-        .camera = 0,
-    };
-
-    SDL_Window *window;
-    
     scc(SDL_Init(SDL_INIT_VIDEO));
 
     gl_attr();
-
+    SDL_Window *window;
     window = scp(
         SDL_CreateWindow("Text Editor", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 
                         SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL)
     );
-
     scp(SDL_GL_CreateContext(window));
-
     init_glew();
-    
-    tile_glyph_buffer_init(&tgu, "charmap-oldschool_white.png", "shaders/tile_glyph.vert", 
-                           "shaders/tile_glyph.frag");
 
-    glUniform2f(tgu.resolution, SCREEN_WIDTH, SCREEN_HEIGHT);
-    glUniform2f(tgu.scale, FONT_SCALE, FONT_SCALE);
+    Tile_Glyph_Renderer tgr = tile_glyph_renderer_init(
+        "charmap-oldschool_white.png",   
+        "shaders/tile_glyph.vert", 
+        "shaders/tile_glyph.frag");
+
+    glUniform2f(tgr.resolution, SCREEN_WIDTH, SCREEN_HEIGHT);
+    glUniform2f(tgr.scale, FONT_SCALE, FONT_SCALE);
 
     char *filename = NULL;
     if (argc > 1) {
@@ -261,7 +252,7 @@ int main(int argc, char *argv[])
                 case SDL_MOUSEWHEEL: {
                     camera_scale *= (event.wheel.y > 0) ? 1.05 : 0.95;
                     assert(camera_scale > 0);
-                    glUniform2f(tgu.scale, camera_scale, camera_scale);
+                    glUniform2f(tgr.scale, camera_scale, camera_scale);
                 } break;
             }
         }
@@ -270,7 +261,7 @@ int main(int argc, char *argv[])
             int w, h;
             SDL_GetWindowSize(window, &w, &h);
             glViewport(0, 0, w, h);
-            glUniform2f(tgu.resolution, (float) w, (float) h);
+            glUniform2f(tgr.resolution, (float) w, (float) h);
         }
 
         const Vec2f cursor_pos = vec2f(e.cx * FONT_CHAR_WIDTH  * camera_scale, 
@@ -282,18 +273,18 @@ int main(int argc, char *argv[])
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        glUniform1f(tgu.time, (float) SDL_GetTicks() / 1000.0f);
-        glUniform2f(tgu.camera, camera_pos.x, -camera_pos.y);
+        glUniform1f(tgr.time, (float) SDL_GetTicks() / 1000.0f);
+        glUniform2f(tgr.camera, camera_pos.x, -camera_pos.y);
 
-        tile_glyph_buffer_clear();
+        tile_glyph_buffer_clear(&tgr);
         for (int cy = 0; cy < (int) e.lines.length; cy++) {
             const Line *line = list_get(&e.lines, cy);
-            tile_glyph_render_text(line->s, vec2i(0, -cy), vec4fs(1.0f), vec4fs(0.0f));
+            tile_glyph_render_text(&tgr, line->s, vec2i(0, -cy), vec4fs(1.0f), vec4fs(0.0f));
         }
-        gl_render_cursor(&e);
-        tile_glyph_buffer_sync();
+        gl_render_cursor(&tgr, &e);
+        tile_glyph_buffer_sync(&tgr);
 
-        tile_glyph_draw();
+        tile_glyph_draw(&tgr);
 
         const Uint32 duration = (SDL_GetTicks() - start);
         if (duration < DELTA_TIME_MS) {

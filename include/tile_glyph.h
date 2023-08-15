@@ -2,15 +2,7 @@
 #define YADED_TYLEGLYPH_H_
 
 #include "la.h"
-#include "glyph.h"
-
-typedef enum {
-    TILE_GLYPH_ATTR_TILE = 0,
-    TILE_GLYPH_ATTR_CH,
-    TILE_GLYPH_ATTR_FG_COLOR,
-    TILE_GLYPH_ATTR_BG_COLOR,
-    COUNT_TILE_GLYPH_ATTRS,
-} Tile_Glyph_Attr;
+#include "gl_extra.h"
 
 typedef struct {
     Vec2i tile;
@@ -19,14 +11,31 @@ typedef struct {
     Vec4f bg_color;
 } Tile_Glyph;
 
-void tile_glyph_buffer_init(Glyph_Uniform *tgu, const char *atlas_filename, 
-                            const char *vert_filename, const char *frag_filename);
+typedef struct {
+    size_t offset;
+    GLint  comps;
+    GLenum type;
+} Attr_Def;
 
-void tile_glyph_buffer_clear(void);
-void tile_glyph_buffer_push(Tile_Glyph glyph);
-void tile_glyph_buffer_sync(void);
-void tile_glyph_render_text(const char *s, Vec2i tile, Vec4f fg_color, Vec4f bg_color);
-void tile_glyph_draw(void);
+typedef struct {
+    GLuint time;
+    GLuint resolution;
+    GLuint scale;
+    GLuint camera;
+
+    Tile_Glyph *buffer;
+    size_t buffer_count;
+    size_t buffer_capacity;
+} Tile_Glyph_Renderer;
+
+Tile_Glyph_Renderer tile_glyph_renderer_init(
+    const char *atlas_filename, const char *vert_filename, 
+    const char *frag_filename);
+
+void tile_glyph_buffer_clear(Tile_Glyph_Renderer *tgr);
+void tile_glyph_buffer_sync(Tile_Glyph_Renderer *tgr);
+void tile_glyph_render_text(Tile_Glyph_Renderer *tgr, const char *s, Vec2i tile, Vec4f fg_color, Vec4f bg_color);
+void tile_glyph_draw(Tile_Glyph_Renderer *tgr);
 
 
 #endif // YADED_TYLEGLYPH_H_
