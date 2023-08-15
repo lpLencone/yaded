@@ -129,54 +129,62 @@ void init_font_texture(void)
 }
 
 typedef struct {
+    Vec2f pos;
+    Vec2f size;
+    int ch;
+    Vec4f fg_color;
+    Vec4f bg_color;
+} FreeType_Glyph;
+
+typedef struct {
     Vec2i tile;
     int ch;
     Vec4f fg_color;
     Vec4f bg_color;
-} Glyph;
+} Tile_Glyph;
 
 typedef enum {
-    GLYPH_ATTR_TILE = 0,
-    GLYPH_ATTR_CH,
-    GLYPH_ATTR_FG_COLOR,
-    GLYPH_ATTR_BG_COLOR,
-    COUNT_GLYPH_ATTRS,
-} Glyph_Attr;
+    TILE_GLYPH_ATTR_TILE = 0,
+    TILE_GLYPH_ATTR_CH,
+    TILE_GLYPH_ATTR_FG_COLOR,
+    TILE_GLYPH_ATTR_BG_COLOR,
+    COUNT_TILE_GLYPH_ATTRS,
+} Tile_Glyph_Attr;
 
 typedef struct {
     size_t offset;
     GLint  comps;
     GLenum type;
-} Glyph_Attr_Def;
+} Attr_Def;
 
-static const Glyph_Attr_Def glyph_attr_defs[COUNT_GLYPH_ATTRS] = {
-    [GLYPH_ATTR_TILE]  = {
-        .offset = offsetof(Glyph, tile),
+static const Attr_Def glyph_attr_defs[COUNT_TILE_GLYPH_ATTRS] = {
+    [TILE_GLYPH_ATTR_TILE]  = {
+        .offset = offsetof(Tile_Glyph, tile),
         .comps = 2,
         .type = GL_INT,
     },
-    [GLYPH_ATTR_CH]    = {
-        .offset = offsetof(Glyph, ch),
+    [TILE_GLYPH_ATTR_CH]    = {
+        .offset = offsetof(Tile_Glyph, ch),
         .comps = 1,
         .type = GL_INT,
     },
-    [GLYPH_ATTR_FG_COLOR] = {
-        .offset = offsetof(Glyph, fg_color),
+    [TILE_GLYPH_ATTR_FG_COLOR] = {
+        .offset = offsetof(Tile_Glyph, fg_color),
         .comps = 4,
         .type = GL_FLOAT,
     },
-    [GLYPH_ATTR_BG_COLOR] = {
-        .offset = offsetof(Glyph, bg_color),
+    [TILE_GLYPH_ATTR_BG_COLOR] = {
+        .offset = offsetof(Tile_Glyph, bg_color),
         .comps = 4,
         .type = GL_FLOAT,
-    }
+    },
 };
 
-static_assert(COUNT_GLYPH_ATTRS == 4, "The amount of glyph vertex attributes has changed");
+static_assert(COUNT_TILE_GLYPH_ATTRS == 4, "The amount of glyph vertex attributes has changed");
 
-#define GLYPH_BUFFER_CAPACITY   (1024 * 1024)
-Glyph glyph_buffer[GLYPH_BUFFER_CAPACITY];
-size_t glyph_buffer_count = 0;
+#define TILE_GLYPH_BUFFER_CAPACITY   (1024 * 1024)
+Tile_Glyph tile_glyph_buffer[TILE_GLYPH_BUFFER_CAPACITY];
+size_t tile_glyph_buffer_count = 0;
 
 void init_buffers(void)
 {
@@ -187,9 +195,9 @@ void init_buffers(void)
     GLuint vbo = 0;
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(glyph_buffer), glyph_buffer, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(tile_glyph_buffer), tile_glyph_buffer, GL_DYNAMIC_DRAW);
 
-    for (Glyph_Attr attr = 0; attr < COUNT_GLYPH_ATTRS; attr++) {
+    for (Tile_Glyph_Attr attr = 0; attr < COUNT_TILE_GLYPH_ATTRS; attr++) {
         glEnableVertexAttribArray(attr);
         switch (glyph_attr_defs[attr].type) {
             case GL_FLOAT: {
@@ -197,7 +205,7 @@ void init_buffers(void)
                     attr,
                     glyph_attr_defs[attr].comps, 
                     glyph_attr_defs[attr].type, 
-                    GL_FALSE, sizeof(Glyph), 
+                    GL_FALSE, sizeof(Tile_Glyph), 
                     (void *) glyph_attr_defs[attr].offset
                 );
             } break;
@@ -207,7 +215,7 @@ void init_buffers(void)
                     attr,
                     glyph_attr_defs[attr].comps,
                     glyph_attr_defs[attr].type,
-                    sizeof(Glyph),
+                    sizeof(Tile_Glyph),
                     (void *) glyph_attr_defs[attr].offset
                 );
             } break;
@@ -220,36 +228,36 @@ void init_buffers(void)
     }
 }
 
-void glyph_buffer_clear(void)
+void tile_glyph_buffer_clear(void)
 {
-    glyph_buffer_count = 0;
+    tile_glyph_buffer_count = 0;
 }
 
-void glyph_buffer_push(Glyph glyph)
+void tile_glyph_buffer_push(Tile_Glyph glyph)
 {
-    assert(glyph_buffer_count < GLYPH_BUFFER_CAPACITY);
-    glyph_buffer[glyph_buffer_count++] = glyph;
+    assert(tile_glyph_buffer_count < TILE_GLYPH_BUFFER_CAPACITY);
+    tile_glyph_buffer[tile_glyph_buffer_count++] = glyph;
 }
 
-void glyph_buffer_sync(void)
+void tile_glyph_buffer_sync(void)
 {
     glBufferSubData(GL_ARRAY_BUFFER, 
                     0, 
-                    glyph_buffer_count * sizeof(Glyph), 
-                    glyph_buffer);
+                    tile_glyph_buffer_count * sizeof(Tile_Glyph), 
+                    tile_glyph_buffer);
 }
 
 void gl_render_text(const char *s, Vec2i tile, Vec4f fg_color, Vec4f bg_color)
 {
     size_t slen = strlen(s);
     for (size_t i = 0; i < slen; i++) {
-        Glyph glyph = {
+        Tile_Glyph glyph = {
             .tile       = vec2i_add(tile, vec2i(i, 0)),
             .ch         = s[i],
             .fg_color   = fg_color,
             .bg_color   = bg_color,
         };
-        glyph_buffer_push(glyph);
+        tile_glyph_buffer_push(glyph);
     }
 }
 
@@ -444,22 +452,22 @@ int main(int argc, char *argv[])
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        glyph_buffer_clear();
+        tile_glyph_buffer_clear();
         for (int cy = 0; cy < (int) e.lines.length; cy++) {
             const Line *line = list_get(&e.lines, cy);
             gl_render_text(line->s, vec2i(0, -cy), vec4fs(1.0f), vec4fs(0.0f));
         }
-        glyph_buffer_sync();
+        tile_glyph_buffer_sync();
 
         glUniform1f(time_uniform, (float) SDL_GetTicks() / 1000.0f);
         glUniform2f(camera_uniform, camera_pos.x, -camera_pos.y);
 
-        glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, glyph_buffer_count);
+        glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, tile_glyph_buffer_count);
 
-        glyph_buffer_clear();
+        tile_glyph_buffer_clear();
         gl_render_cursor(&e);
-        glyph_buffer_sync();
-        glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, glyph_buffer_count);
+        tile_glyph_buffer_sync();
+        glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, tile_glyph_buffer_count);
 
         const Uint32 duration = (SDL_GetTicks() - start);
         if (duration < DELTA_TIME_MS) {
