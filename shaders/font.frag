@@ -42,9 +42,9 @@ void main() {
 
     vec4 tc = texture(font, t);
     vec4 rainbow = vec4(
-        map01(sin(uv.x + time)), 
-        map01(cos(uv.y + time)), 
-        map01(sin(time + uv.x + uv.y)), 
+        map01(sin(uv.x        + time)), 
+        map01(cos(uv.y        + time)), 
+        map01(sin(uv.x + uv.y + time)), 
         1.0
     ); 
     gl_FragColor = glyph_bg_color * (1.0 - tc.x) + tc.x * glyph_fg_color * rainbow;
