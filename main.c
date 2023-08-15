@@ -145,7 +145,7 @@ typedef enum {
 
 typedef struct {
     size_t offset;
-    size_t comps;
+    GLint  comps;
     GLenum type;
 } Glyph_Attr_Def;
 
@@ -445,7 +445,7 @@ int main(int argc, char *argv[])
         glClear(GL_COLOR_BUFFER_BIT);
 
         glyph_buffer_clear();
-        for (size_t cy = 0; cy < e.lines.length; cy++) {
+        for (int cy = 0; cy < (int) e.lines.length; cy++) {
             const Line *line = list_get(&e.lines, cy);
             gl_render_text(line->s, vec2i(0, -cy), vec4fs(1.0f), vec4fs(0.0f));
         }
