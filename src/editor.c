@@ -157,7 +157,6 @@ static void break_line(Editor *e)
 static void editor_move(Editor *e, EditorKeys key)
 {
     size_t line_size = get_line_length(e);
-
     switch (key) {
         case EDITOR_LEFT: {
             if (e->cx > 0) {

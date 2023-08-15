@@ -419,13 +419,15 @@ void init_font_texture(void)
 typedef struct {
     Vec2i tile;
     int ch;
-    Vec4f color;
+    Vec4f fg_color;
+    Vec4f bg_color;
 } Glyph;
 
 typedef enum {
     GLYPH_ATTR_TILE = 0,
     GLYPH_ATTR_CH,
-    GLYPH_ATTR_COLOR,
+    GLYPH_ATTR_FG_COLOR,
+    GLYPH_ATTR_BG_COLOR,
     COUNT_GLYPH_ATTRS,
 } Glyph_Attr;
 
@@ -446,14 +448,19 @@ static const Glyph_Attr_Def glyph_attr_defs[COUNT_GLYPH_ATTRS] = {
         .comps = 1,
         .type = GL_INT,
     },
-    [GLYPH_ATTR_COLOR] = {
-        .offset = offsetof(Glyph, color),
+    [GLYPH_ATTR_FG_COLOR] = {
+        .offset = offsetof(Glyph, fg_color),
         .comps = 4,
         .type = GL_FLOAT,
     },
+    [GLYPH_ATTR_BG_COLOR] = {
+        .offset = offsetof(Glyph, bg_color),
+        .comps = 4,
+        .type = GL_FLOAT,
+    }
 };
 
-static_assert(COUNT_GLYPH_ATTRS == 3, "The amount of glyph vertex attributes has changed");
+static_assert(COUNT_GLYPH_ATTRS == 4, "The amount of glyph vertex attributes has changed");
 
 #define GLYPH_BUFFER_CAPACITY   1024
 
@@ -516,75 +523,88 @@ void glyph_buffer_sync(void)
                     glyph_buffer);
 }
 
-void gl_render_text(const char *s, size_t slen, Vec2i tile, Vec4f color)
+void gl_render_text(const char *s, Vec2i tile, Vec4f fg_color, Vec4f bg_color)
 {
+    size_t slen = strlen(s);
     for (size_t i = 0; i < slen; i++) {
         Glyph glyph = {
-            .tile  = vec2i_add(tile, vec2i(i, 0)),
-            .ch    = s[i],
-            .color = color
+            .tile       = vec2i_add(tile, vec2i(i, 0)),
+            .ch         = s[i],
+            .fg_color   = fg_color,
+            .bg_color   = bg_color,
         };
         glyph_buffer_push(glyph);
     }
 }
 
-int main(void)
+int main(int argc, char *argv[])
 {
-    scc(SDL_Init(SDL_INIT_VIDEO));
-
-    gl_attr();
-
-    SDL_Window *window = scp(
-        SDL_CreateWindow("Text Editor", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 
-                         SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL)
-    );
-
-    // SDL_GLContext context =
-    scp(SDL_GL_CreateContext(window));
-    
-    const GLenum glInitStatus = glewInit();
-    if (glInitStatus != GLEW_OK) {
-        fprintf(stderr, "%s\n", glewGetErrorString(glInitStatus));
-        exit(1);
-    }
-
-    if (!GLEW_ARB_draw_instanced) {
-        fprintf(stderr, "ARB_draw_instanced is not supported; game may not work properly.\n");
-        exit(1);
-    }
-
-    if (!GLEW_ARB_instanced_arrays) {
-        fprintf(stderr, "ARB_instaced_arrays is not supported; game may not work properly.\n");
-        exit(1);
-    }
-
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    if (GLEW_ARB_debug_output) {
-        glEnable(GL_DEBUG_OUTPUT);
-        glDebugMessageCallback(MessageCallback, 0);
-    } else {
-        fprintf(stderr, "WARNING! GLEW_ARB_debug_output is not available\n");
-    }
-
     GLint time_uniform = 0;
     GLint resolution_uniform = 0;
     GLint scale_uniform = 0;
-    init_shaders(&time_uniform, &resolution_uniform, &scale_uniform);
-    glUniform2f(resolution_uniform, SCREEN_WIDTH, SCREEN_HEIGHT);
-    glUniform2f(scale_uniform, 3.0f, 3.0f);
+    SDL_Window *window;
+    {
+        scc(SDL_Init(SDL_INIT_VIDEO));
 
-    init_font_texture();
-    init_buffers();
+        gl_attr();
 
-    const char *s = "Hello, World!";
-    gl_render_text(s, strlen(s), vec2is(0), vec4f(1.0f, 0.0f, 0.0f, 1.0f));
-    glyph_buffer_sync();
+        window = scp(
+            SDL_CreateWindow("Text Editor", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 
+                            SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL)
+        );
 
-    s = "Foo Bar";
-    gl_render_text(s, strlen(s), vec2i(0, 1), vec4f(0.0f, 1.0f, 0.0f, 1.0f));
-    glyph_buffer_sync();
+        // SDL_GLContext context =
+        scp(SDL_GL_CreateContext(window));
+        
+        const GLenum glInitStatus = glewInit();
+        if (glInitStatus != GLEW_OK) {
+            fprintf(stderr, "%s\n", glewGetErrorString(glInitStatus));
+            exit(1);
+        }
+
+        if (!GLEW_ARB_draw_instanced) {
+            fprintf(stderr, "ARB_draw_instanced is not supported; game may not work properly.\n");
+            exit(1);
+        }
+
+        if (!GLEW_ARB_instanced_arrays) {
+            fprintf(stderr, "ARB_instaced_arrays is not supported; game may not work properly.\n");
+            exit(1);
+        }
+
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        if (GLEW_ARB_debug_output) {
+            glEnable(GL_DEBUG_OUTPUT);
+            glDebugMessageCallback(MessageCallback, 0);
+        } else {
+            fprintf(stderr, "WARNING! GLEW_ARB_debug_output is not available\n");
+        }
+
+        init_shaders(&time_uniform, &resolution_uniform, &scale_uniform);
+        glUniform2f(resolution_uniform, SCREEN_WIDTH, SCREEN_HEIGHT);
+        glUniform2f(scale_uniform, 3.0f, 3.0f);
+
+        init_font_texture();
+        init_buffers();
+
+        const char *s = "Hello, World!";
+        gl_render_text(s, vec2is(0), vec4f(1.0f, 0.0f, 0.0f, 1.0f), vec4fs(1.0f));
+        glyph_buffer_sync();
+
+        s = "Foo Bar";
+        gl_render_text(s, vec2i(0, 1), vec4f(0.0f, 1.0f, 0.0f, 1.0f), vec4fs(0.0f));
+        glyph_buffer_sync();
+    }
+
+    char *filename = NULL;
+    if (argc > 1) {
+        filename = argv[1];
+    }
+
+    e = editor_init(filename);
+
 
     bool quit = false;
     while (!quit) {
@@ -595,10 +615,25 @@ int main(void)
                     quit = true;
                 } break;
 
-                case SDL_WINDOWEVENT_RESIZED:
-                case SDL_WINDOWEVENT_SIZE_CHANGED: {
-                    // Doesn't ever get here at all
-                }
+                // case SDL_KEYDOWN: {
+                //     switch (event.key.keysym.sym) {
+                //         case SDLK_BACKSPACE: 
+                //         case SDLK_DELETE: 
+                //         case SDLK_RETURN: 
+                //         case SDLK_TAB: 
+                //         case SDLK_F3:
+                //         case SDLK_LEFT:
+                //         case SDLK_RIGHT: 
+                //         case SDLK_UP:
+                //         case SDLK_DOWN:
+                //         case SDLK_HOME: 
+                //         case SDLK_END:
+                //         case SDLK_PAGEUP:
+                //         case SDLK_PAGEDOWN: {
+                //             editor_process_key(&e, find_key(event.key.keysym.sym));
+                //         }
+                //     }
+                // } break;
             }
         }
 
