@@ -14,6 +14,7 @@
 #include "la.h"
 #include "editor.h"
 #include "gl_extra.h"
+#include "tile_glyph.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -65,7 +66,7 @@ void MessageCallback(GLenum source, GLenum type, GLuint id, GLenum severity,
             type, severity, message);
 }
 
-void gl_attr()
+void gl_attr(void)
 {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
@@ -78,54 +79,34 @@ void gl_attr()
     printf("GL version %d.%d\n", major, minor);
 }
 
-void init_shaders(GLint *time_uniform, GLint *resolution_uniform, GLint *scale_uniform,
-                  GLint *camera_uniform)
+void init_glew(void)
 {
-    GLuint vert_shader = 0;
-    if (!compile_shader_file("./shaders/font.vert", GL_VERTEX_SHADER, &vert_shader)) {
-        exit(1);
-    };
-
-    GLuint frag_shader = 0;
-    if (!compile_shader_file("./shaders/font.frag", GL_FRAGMENT_SHADER, &frag_shader)) {
-        exit(1);
-    };
-
-    GLuint program = 0;
-    if (!link_program(vert_shader, frag_shader, &program)) {
+    const GLenum glInitStatus = glewInit();
+    if (glInitStatus != GLEW_OK) {
+        fprintf(stderr, "%s\n", glewGetErrorString(glInitStatus));
         exit(1);
     }
 
-    glUseProgram(program);
-
-    *time_uniform = glGetUniformLocation(program, "time");
-    *resolution_uniform = glGetUniformLocation(program, "resolution");
-    *scale_uniform = glGetUniformLocation(program, "scale");
-    *camera_uniform = glGetUniformLocation(program, "camera");
-}
-
-void init_font_texture(void)
-{
-    const char *filename = "charmap-oldschool_white.png";
-    int width, height, n;
-    unsigned char *pixels = stbi_load(filename, &width, &height, &n, STBI_rgb_alpha);
-    if (pixels == NULL) {
-        fprintf(stderr, "ERROR: could not load file %s: %s\n", filename, stbi_failure_reason());
+    if (!GLEW_ARB_draw_instanced) {
+        fprintf(stderr, "ARB_draw_instanced is not supported; game may not work properly.\n");
         exit(1);
     }
 
-    GLuint font_texture = 0;
-    glActiveTexture(GL_TEXTURE0);
-    glGenTextures(1, &font_texture);
-    glBindTexture(GL_TEXTURE_2D, font_texture);
+    if (!GLEW_ARB_instanced_arrays) {
+        fprintf(stderr, "ARB_instaced_arrays is not supported; game may not work properly.\n");
+        exit(1);
+    }
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 
-                 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    if (GLEW_ARB_debug_output) {
+        glEnable(GL_DEBUG_OUTPUT);
+        glDebugMessageCallback(MessageCallback, 0);
+    } else {
+        fprintf(stderr, "WARNING! GLEW_ARB_debug_output is not available\n");
+    }
+
 }
 
 typedef struct {
@@ -135,131 +116,6 @@ typedef struct {
     Vec4f fg_color;
     Vec4f bg_color;
 } FreeType_Glyph;
-
-typedef struct {
-    Vec2i tile;
-    int ch;
-    Vec4f fg_color;
-    Vec4f bg_color;
-} Tile_Glyph;
-
-typedef enum {
-    TILE_GLYPH_ATTR_TILE = 0,
-    TILE_GLYPH_ATTR_CH,
-    TILE_GLYPH_ATTR_FG_COLOR,
-    TILE_GLYPH_ATTR_BG_COLOR,
-    COUNT_TILE_GLYPH_ATTRS,
-} Tile_Glyph_Attr;
-
-typedef struct {
-    size_t offset;
-    GLint  comps;
-    GLenum type;
-} Attr_Def;
-
-static const Attr_Def glyph_attr_defs[COUNT_TILE_GLYPH_ATTRS] = {
-    [TILE_GLYPH_ATTR_TILE]  = {
-        .offset = offsetof(Tile_Glyph, tile),
-        .comps = 2,
-        .type = GL_INT,
-    },
-    [TILE_GLYPH_ATTR_CH]    = {
-        .offset = offsetof(Tile_Glyph, ch),
-        .comps = 1,
-        .type = GL_INT,
-    },
-    [TILE_GLYPH_ATTR_FG_COLOR] = {
-        .offset = offsetof(Tile_Glyph, fg_color),
-        .comps = 4,
-        .type = GL_FLOAT,
-    },
-    [TILE_GLYPH_ATTR_BG_COLOR] = {
-        .offset = offsetof(Tile_Glyph, bg_color),
-        .comps = 4,
-        .type = GL_FLOAT,
-    },
-};
-
-static_assert(COUNT_TILE_GLYPH_ATTRS == 4, "The amount of glyph vertex attributes has changed");
-
-#define TILE_GLYPH_BUFFER_CAPACITY   (1024 * 1024)
-Tile_Glyph tile_glyph_buffer[TILE_GLYPH_BUFFER_CAPACITY];
-size_t tile_glyph_buffer_count = 0;
-
-void init_buffers(void)
-{
-    GLuint vao = 0;
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
-
-    GLuint vbo = 0;
-    glGenBuffers(1, &vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(tile_glyph_buffer), tile_glyph_buffer, GL_DYNAMIC_DRAW);
-
-    for (Tile_Glyph_Attr attr = 0; attr < COUNT_TILE_GLYPH_ATTRS; attr++) {
-        glEnableVertexAttribArray(attr);
-        switch (glyph_attr_defs[attr].type) {
-            case GL_FLOAT: {
-                glVertexAttribPointer(
-                    attr,
-                    glyph_attr_defs[attr].comps, 
-                    glyph_attr_defs[attr].type, 
-                    GL_FALSE, sizeof(Tile_Glyph), 
-                    (void *) glyph_attr_defs[attr].offset
-                );
-            } break;
-
-            case GL_INT: {
-                glVertexAttribIPointer(
-                    attr,
-                    glyph_attr_defs[attr].comps,
-                    glyph_attr_defs[attr].type,
-                    sizeof(Tile_Glyph),
-                    (void *) glyph_attr_defs[attr].offset
-                );
-            } break;
-            
-            default:
-                assert(false && "Unreachable");
-                exit(1); // why would anyone disable assert though?
-        }
-        glVertexAttribDivisor(attr, 1);
-    }
-}
-
-void tile_glyph_buffer_clear(void)
-{
-    tile_glyph_buffer_count = 0;
-}
-
-void tile_glyph_buffer_push(Tile_Glyph glyph)
-{
-    assert(tile_glyph_buffer_count < TILE_GLYPH_BUFFER_CAPACITY);
-    tile_glyph_buffer[tile_glyph_buffer_count++] = glyph;
-}
-
-void tile_glyph_buffer_sync(void)
-{
-    glBufferSubData(GL_ARRAY_BUFFER, 
-                    0, 
-                    tile_glyph_buffer_count * sizeof(Tile_Glyph), 
-                    tile_glyph_buffer);
-}
-
-void gl_render_text(const char *s, Vec2i tile, Vec4f fg_color, Vec4f bg_color)
-{
-    size_t slen = strlen(s);
-    for (size_t i = 0; i < slen; i++) {
-        Tile_Glyph glyph = {
-            .tile       = vec2i_add(tile, vec2i(i, 0)),
-            .ch         = s[i],
-            .fg_color   = fg_color,
-            .bg_color   = bg_color,
-        };
-        tile_glyph_buffer_push(glyph);
-    }
-}
 
 void gl_render_cursor(Editor *e)
 {
@@ -274,9 +130,8 @@ void gl_render_cursor(Editor *e)
         ecx = line->size;
     }
 
-    gl_render_text(c, vec2i(ecx, -e->cy), vec4fs(0.0f), vec4fs(1.0f));
+    tile_glyph_render_text(c, vec2i(ecx, -e->cy), vec4fs(0.0f), vec4fs(1.0f));
 }
-
 
 const int keymap[] = {
     SDLK_LEFT,
@@ -305,58 +160,33 @@ EditorKeys find_key(int code) {
 
 int main(int argc, char *argv[])
 {
-    GLint time_uniform = 0;
-    GLint resolution_uniform = 0;
-    GLint scale_uniform = 0;
-    GLint camera_uniform = 0;
+    Glyph_Uniform tgu = {
+        .time = 0,
+        .resolution = 0,
+        .scale = 0,
+        .camera = 0,
+    };
+
     SDL_Window *window;
     
-    {
-        scc(SDL_Init(SDL_INIT_VIDEO));
+    scc(SDL_Init(SDL_INIT_VIDEO));
 
-        gl_attr();
+    gl_attr();
 
-        window = scp(
-            SDL_CreateWindow("Text Editor", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 
-                            SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL)
-        );
+    window = scp(
+        SDL_CreateWindow("Text Editor", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 
+                        SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL)
+    );
 
-        // SDL_GLContext context =
-        scp(SDL_GL_CreateContext(window));
-        
-        const GLenum glInitStatus = glewInit();
-        if (glInitStatus != GLEW_OK) {
-            fprintf(stderr, "%s\n", glewGetErrorString(glInitStatus));
-            exit(1);
-        }
+    scp(SDL_GL_CreateContext(window));
 
-        if (!GLEW_ARB_draw_instanced) {
-            fprintf(stderr, "ARB_draw_instanced is not supported; game may not work properly.\n");
-            exit(1);
-        }
+    init_glew();
+    
+    tile_glyph_buffer_init(&tgu, "charmap-oldschool_white.png", "shaders/tile_glyph.vert", 
+                           "shaders/tile_glyph.frag");
 
-        if (!GLEW_ARB_instanced_arrays) {
-            fprintf(stderr, "ARB_instaced_arrays is not supported; game may not work properly.\n");
-            exit(1);
-        }
-
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-        if (GLEW_ARB_debug_output) {
-            glEnable(GL_DEBUG_OUTPUT);
-            glDebugMessageCallback(MessageCallback, 0);
-        } else {
-            fprintf(stderr, "WARNING! GLEW_ARB_debug_output is not available\n");
-        }
-
-        init_shaders(&time_uniform, &resolution_uniform, &scale_uniform, &camera_uniform);
-        glUniform2f(resolution_uniform, SCREEN_WIDTH, SCREEN_HEIGHT);
-        glUniform2f(scale_uniform, FONT_SCALE, FONT_SCALE);
-
-        init_font_texture();
-        init_buffers();
-    }
+    glUniform2f(tgu.resolution, SCREEN_WIDTH, SCREEN_HEIGHT);
+    glUniform2f(tgu.scale, FONT_SCALE, FONT_SCALE);
 
     char *filename = NULL;
     if (argc > 1) {
@@ -431,7 +261,7 @@ int main(int argc, char *argv[])
                 case SDL_MOUSEWHEEL: {
                     camera_scale *= (event.wheel.y > 0) ? 1.05 : 0.95;
                     assert(camera_scale > 0);
-                    glUniform2f(scale_uniform, camera_scale, camera_scale);
+                    glUniform2f(tgu.scale, camera_scale, camera_scale);
                 } break;
             }
         }
@@ -440,7 +270,7 @@ int main(int argc, char *argv[])
             int w, h;
             SDL_GetWindowSize(window, &w, &h);
             glViewport(0, 0, w, h);
-            glUniform2f(resolution_uniform, (float) w, (float) h);
+            glUniform2f(tgu.resolution, (float) w, (float) h);
         }
 
         const Vec2f cursor_pos = vec2f(e.cx * FONT_CHAR_WIDTH  * camera_scale, 
@@ -452,22 +282,18 @@ int main(int argc, char *argv[])
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
+        glUniform1f(tgu.time, (float) SDL_GetTicks() / 1000.0f);
+        glUniform2f(tgu.camera, camera_pos.x, -camera_pos.y);
+
         tile_glyph_buffer_clear();
         for (int cy = 0; cy < (int) e.lines.length; cy++) {
             const Line *line = list_get(&e.lines, cy);
-            gl_render_text(line->s, vec2i(0, -cy), vec4fs(1.0f), vec4fs(0.0f));
+            tile_glyph_render_text(line->s, vec2i(0, -cy), vec4fs(1.0f), vec4fs(0.0f));
         }
-        tile_glyph_buffer_sync();
-
-        glUniform1f(time_uniform, (float) SDL_GetTicks() / 1000.0f);
-        glUniform2f(camera_uniform, camera_pos.x, -camera_pos.y);
-
-        glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, tile_glyph_buffer_count);
-
-        tile_glyph_buffer_clear();
         gl_render_cursor(&e);
         tile_glyph_buffer_sync();
-        glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, tile_glyph_buffer_count);
+
+        tile_glyph_draw();
 
         const Uint32 duration = (SDL_GetTicks() - start);
         if (duration < DELTA_TIME_MS) {
