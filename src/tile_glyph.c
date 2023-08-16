@@ -101,8 +101,8 @@ void tgr_sync(Tile_Glyph_Renderer *tgr)
                     tgr->buffer);
 }
 
-void tgr_text(Tile_Glyph_Renderer *tgr, const char *s, Vec2i tile, 
-              Vec4f fg_color, Vec4f bg_color)
+void tgr_add_text(Tile_Glyph_Renderer *tgr, const char *s, Vec2i tile, 
+                  Vec4f fg_color, Vec4f bg_color)
 {
     size_t slen = strlen(s);
     for (size_t i = 0; i < slen; i++) {

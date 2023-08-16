@@ -130,7 +130,7 @@ void gl_render_cursor(Tile_Glyph_Renderer *tgr, Editor *e)
         ecx = line->size;
     }
 
-    tile_glyph_render_text(tgr, c, vec2i(ecx, -e->cy), vec4fs(0.0f), vec4fs(1.0f));
+    tgr_add_text(tgr, c, vec2i(ecx, -e->cy), vec4fs(0.0f), vec4fs(1.0f));
 }
 
 const int keymap[] = {
@@ -274,15 +274,15 @@ int main(int argc, char *argv[])
         glUniform1f(tgr.time, (float) SDL_GetTicks() / 1000.0f);
         glUniform2f(tgr.camera, camera_pos.x, -camera_pos.y);
 
-        tile_glyph_buffer_clear(&tgr);
+        tgr_clear(&tgr);
         for (int cy = 0; cy < (int) e.lines.length; cy++) {
             const Line *line = list_get(&e.lines, cy);
-            tile_glyph_render_text(&tgr, line->s, vec2i(0, -cy), vec4fs(1.0f), vec4fs(0.0f));
+            tgr_add_text(&tgr, line->s, vec2i(0, -cy), vec4fs(1.0f), vec4fs(0.0f));
         }
         gl_render_cursor(&tgr, &e);
-        tile_glyph_buffer_sync(&tgr);
+        tgr_sync(&tgr);
 
-        tile_glyph_draw(&tgr);
+        tgr_draw(&tgr);
 
         const Uint32 duration = (SDL_GetTicks() - start);
         if (duration < DELTA_TIME_MS) {
