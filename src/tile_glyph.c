@@ -5,8 +5,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-#define TILE_GLYPH_BUFFER_CAPACITY (512 * 1024)
-
 typedef enum {
     TILE_GLYPH_ATTR_TILE = 0,
     TILE_GLYPH_ATTR_CH,
@@ -40,31 +38,21 @@ static const Attr_Def glyph_attr_defs[COUNT_TILE_GLYPH_ATTRS] = {
 
 static_assert(COUNT_TILE_GLYPH_ATTRS == 4, "The amount of glyph vertex attributes has changed");
 
-static void load_texture_atlas(const char *filename);
+static void load_texture_atlas(Tile_Glyph_Renderer *tgr, const char *filename);
 static void init_shaders(Tile_Glyph_Renderer *tgr, const char *vert_filename, 
                          const char *frag_filename);
 
-static void tile_glyph_buffer_push(Tile_Glyph_Renderer * tgr, Tile_Glyph glyph);
+static void tile_glyph_buffer_push(Tile_Glyph_Renderer *tgr, Tile_Glyph glyph);
 
-Tile_Glyph_Renderer tile_glyph_renderer_init(
-    const char *atlas_filename, const char *vert_filename, 
-    const char *frag_filename)
+void tgr_init(Tile_Glyph_Renderer *tgr, const char *atlas_filename, 
+              const char *vert_filename, const char *frag_filename)
 {
-    Tile_Glyph_Renderer tgr = {
-        .time = 0, .resolution = 0, .scale = 0, .camera = 0,
-        .buffer_count = 0, .buffer_capacity = TILE_GLYPH_BUFFER_CAPACITY
-    };
+    glGenVertexArrays(1, &tgr->vao);
+    glBindVertexArray(tgr->vao);
 
-    tgr.buffer = calloc(TILE_GLYPH_BUFFER_CAPACITY, sizeof(Tile_Glyph));
-
-    GLuint vao = 0;
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
-
-    GLuint vbo = 0;
-    glGenBuffers(1, &vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(Tile_Glyph) * tgr.buffer_capacity, tgr.buffer, GL_DYNAMIC_DRAW);
+    glGenBuffers(1, &tgr->vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, tgr->vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(tgr->buffer), tgr->buffer, GL_DYNAMIC_DRAW);
 
     for (Tile_Glyph_Attr attr = 0; attr < COUNT_TILE_GLYPH_ATTRS; attr++) {
         glEnableVertexAttribArray(attr);
@@ -96,10 +84,8 @@ Tile_Glyph_Renderer tile_glyph_renderer_init(
         glVertexAttribDivisor(attr, 1);
     }
 
-    load_texture_atlas(atlas_filename);
-    init_shaders(&tgr, vert_filename, frag_filename);
-
-    return tgr;
+    load_texture_atlas(tgr, atlas_filename);
+    init_shaders(tgr, vert_filename, frag_filename);
 }
 
 void tile_glyph_buffer_clear(Tile_Glyph_Renderer *tgr)
@@ -115,15 +101,16 @@ void tile_glyph_buffer_sync(Tile_Glyph_Renderer *tgr)
                     tgr->buffer);
 }
 
-void tile_glyph_render_text(Tile_Glyph_Renderer *tgr, const char *s, Vec2i tile, Vec4f fg_color, Vec4f bg_color)
+void tile_glyph_render_text(Tile_Glyph_Renderer *tgr, const char *s, Vec2i tile, 
+                            Vec4f fg_color, Vec4f bg_color)
 {
     size_t slen = strlen(s);
     for (size_t i = 0; i < slen; i++) {
         Tile_Glyph glyph = {
-            .tile       = vec2i_add(tile, vec2i(i, 0)),
-            .ch         = s[i],
-            .fg_color   = fg_color,
-            .bg_color   = bg_color,
+            .tile     = vec2i_add(tile, vec2i(i, 0)),
+            .ch       = s[i],
+            .fg_color = fg_color,
+            .bg_color = bg_color,
         };
         tile_glyph_buffer_push(tgr, glyph);
     }
@@ -137,11 +124,11 @@ void tile_glyph_draw(Tile_Glyph_Renderer *tgr)
 /* static */
 static void tile_glyph_buffer_push(Tile_Glyph_Renderer *tgr, Tile_Glyph glyph)
 {
-    assert(tgr->buffer_count < tgr->buffer_capacity);
+    assert(tgr->buffer_count < sizeof(tgr->buffer) / sizeof(Tile_Glyph));
     tgr->buffer[tgr->buffer_count++] = glyph;
 }
 
-static void load_texture_atlas(const char *filename)
+static void load_texture_atlas(Tile_Glyph_Renderer *tgr, const char *filename)
 {
     int w, h, n;
     unsigned char *pixels = stbi_load(filename, &w, &h, &n, STBI_rgb_alpha);
@@ -150,10 +137,9 @@ static void load_texture_atlas(const char *filename)
         exit(1);
     }
 
-    GLuint font_texture = 0;
     glActiveTexture(GL_TEXTURE0);
-    glGenTextures(1, &font_texture);
-    glBindTexture(GL_TEXTURE_2D, font_texture);
+    glGenTextures(1, &tgr->font_texture);
+    glBindTexture(GL_TEXTURE_2D, tgr->font_texture);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -162,10 +148,13 @@ static void load_texture_atlas(const char *filename)
 
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 
                  0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+
+    stbi_image_free(pixels);
 }
 
 
-static void init_shaders(Tile_Glyph_Renderer *tgr, const char *vert_filename, const char *frag_filename)
+static void init_shaders(Tile_Glyph_Renderer *tgr, const char *vert_filename, 
+                         const char *frag_filename)
 {
     GLuint vert_shader = 0;
     if (!compile_shader_file(vert_filename, GL_VERTEX_SHADER, &vert_shader)) {

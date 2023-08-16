@@ -13,7 +13,7 @@
 #include "editor.h"
 #include "gl_extra.h"
 
-#define TILE_GLYPH_BUFFER_CAPACITY (1024)
+#define TILE_GLYPH_BUFFER_CAPACITY (1024 * 1024)
 #include "tile_glyph.h"
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -158,6 +158,8 @@ EditorKeys find_key(int code) {
     assert(0);
 }
 
+static Tile_Glyph_Renderer tgr = {0};
+
 int main(int argc, char *argv[])
 {
     scc(SDL_Init(SDL_INIT_VIDEO));
@@ -171,10 +173,8 @@ int main(int argc, char *argv[])
     scp(SDL_GL_CreateContext(window));
     init_glew();
 
-    Tile_Glyph_Renderer tgr = tile_glyph_renderer_init(
-        "charmap-oldschool_white.png",   
-        "shaders/tile_glyph.vert", 
-        "shaders/tile_glyph.frag");
+    tgr_init(&tgr, "charmap-oldschool_white.png", "shaders/tile_glyph.vert", 
+             "shaders/tile_glyph.frag");
 
     glUniform2f(tgr.resolution, SCREEN_WIDTH, SCREEN_HEIGHT);
     glUniform2f(tgr.scale, FONT_SCALE, FONT_SCALE);
@@ -233,18 +233,16 @@ int main(int argc, char *argv[])
                             SDL_GetWindowSize(window, &w, &h);
                             Vec2f cursor_coord = vec2f_add(
                                 mouse_coord, 
-                                vec2f_sub(camera_pos, vec2f((float) w / 2, (float) h / 2))
+                                vec2f_sub(camera_pos, vec2f(w / 2.0f, h / 2.0f))
                             );
-                            int truex = (int) floorf(cursor_coord.x / ((float) FONT_CHAR_WIDTH * camera_scale));
-                            if (truex < 0) {
-                                truex = 0;
-                            }
-                            int truey = (int) floorf(cursor_coord.y / ((float) FONT_CHAR_HEIGHT * camera_scale)) + 1;
-                            if (truey < 0) {
-                                truey = 0;
-                            }
+                            
+                            int truex = (int) floorf(cursor_coord.x / (FONT_CHAR_WIDTH * camera_scale)); 
+                            if (truex < 0) truex = 0;
 
-                            editor_click(&e, (size_t) truex, (size_t) truey);
+                            int truey = (int) floorf(cursor_coord.y / (FONT_CHAR_HEIGHT * camera_scale)) + 1;
+                            if (truey < 0) truey = 0;
+
+                            editor_click(&e, truex, truey);
                         } break;
                     }
                 } break;
@@ -296,3 +294,4 @@ int main(int argc, char *argv[])
 
     return 0;
 }
+
