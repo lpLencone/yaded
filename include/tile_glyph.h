@@ -38,11 +38,11 @@ typedef struct {
 void tgr_init(Tile_Glyph_Renderer *tgr, const char *atlas_filename, 
               const char *vert_filename, const char *frag_filename);
 
-void tile_glyph_buffer_clear(Tile_Glyph_Renderer *tgr);
-void tile_glyph_buffer_sync(Tile_Glyph_Renderer *tgr);
-void tile_glyph_render_text(Tile_Glyph_Renderer *tgr, const char *s, Vec2i tile, 
-                            Vec4f fg_color, Vec4f bg_color);
-void tile_glyph_draw(Tile_Glyph_Renderer *tgr);
+void tgr_clear(Tile_Glyph_Renderer *tgr);
+void tgr_sync(Tile_Glyph_Renderer *tgr);
+void tgr_text(Tile_Glyph_Renderer *tgr, const char *s, Vec2i tile, 
+              Vec4f fg_color, Vec4f bg_color);
+void tgr_draw(Tile_Glyph_Renderer *tgr);
 
 
 #endif // YADED_TYLEGLYPH_H_

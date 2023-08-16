@@ -42,7 +42,7 @@ static void load_texture_atlas(Tile_Glyph_Renderer *tgr, const char *filename);
 static void init_shaders(Tile_Glyph_Renderer *tgr, const char *vert_filename, 
                          const char *frag_filename);
 
-static void tile_glyph_buffer_push(Tile_Glyph_Renderer *tgr, Tile_Glyph glyph);
+static void buffer_push(Tile_Glyph_Renderer *tgr, Tile_Glyph glyph);
 
 void tgr_init(Tile_Glyph_Renderer *tgr, const char *atlas_filename, 
               const char *vert_filename, const char *frag_filename)
@@ -88,12 +88,12 @@ void tgr_init(Tile_Glyph_Renderer *tgr, const char *atlas_filename,
     init_shaders(tgr, vert_filename, frag_filename);
 }
 
-void tile_glyph_buffer_clear(Tile_Glyph_Renderer *tgr)
+void tgr_clear(Tile_Glyph_Renderer *tgr)
 {
     tgr->buffer_count = 0;
 }
 
-void tile_glyph_buffer_sync(Tile_Glyph_Renderer *tgr)
+void tgr_sync(Tile_Glyph_Renderer *tgr)
 {
     glBufferSubData(GL_ARRAY_BUFFER, 
                     0, 
@@ -101,8 +101,8 @@ void tile_glyph_buffer_sync(Tile_Glyph_Renderer *tgr)
                     tgr->buffer);
 }
 
-void tile_glyph_render_text(Tile_Glyph_Renderer *tgr, const char *s, Vec2i tile, 
-                            Vec4f fg_color, Vec4f bg_color)
+void tgr_text(Tile_Glyph_Renderer *tgr, const char *s, Vec2i tile, 
+              Vec4f fg_color, Vec4f bg_color)
 {
     size_t slen = strlen(s);
     for (size_t i = 0; i < slen; i++) {
@@ -112,17 +112,17 @@ void tile_glyph_render_text(Tile_Glyph_Renderer *tgr, const char *s, Vec2i tile,
             .fg_color = fg_color,
             .bg_color = bg_color,
         };
-        tile_glyph_buffer_push(tgr, glyph);
+        buffer_push(tgr, glyph);
     }
 }
 
-void tile_glyph_draw(Tile_Glyph_Renderer *tgr)
+void tgr_draw(Tile_Glyph_Renderer *tgr)
 {
     glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, tgr->buffer_count);
 }
 
 /* static */
-static void tile_glyph_buffer_push(Tile_Glyph_Renderer *tgr, Tile_Glyph glyph)
+static void buffer_push(Tile_Glyph_Renderer *tgr, Tile_Glyph glyph)
 {
     assert(tgr->buffer_count < sizeof(tgr->buffer) / sizeof(Tile_Glyph));
     tgr->buffer[tgr->buffer_count++] = glyph;
