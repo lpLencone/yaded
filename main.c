@@ -9,12 +9,22 @@
 #define GL_GLEXT_PROTOTYPES
 #include <SDL2/SDL_opengl.h>
 
+
 #include "la.h"
 #include "editor.h"
 #include "gl_extra.h"
 
-#define TILE_GLYPH_BUFFER_CAPACITY (1024 * 1024)
+// #define TILE_GLYPH_RENDERER
+
+#ifdef TILE_GLYPH_RENDERER
 #include "tile_glyph.h"
+#else 
+#include <ft2build.h>
+#include <freetype/freetype.h>
+// #include <freetype/ftoutln.h>
+
+#include "freetype_glyph.h"
+#endif
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -109,30 +119,6 @@ void init_glew(void)
 
 }
 
-typedef struct {
-    Vec2f pos;
-    Vec2f size;
-    int ch;
-    Vec4f fg_color;
-    Vec4f bg_color;
-} FreeType_Glyph;
-
-void gl_render_cursor(Tile_Glyph_Renderer *tgr, Editor *e)
-{
-    const Line *line = list_get(&e->lines, e->cy);
-    char c[2] = {0};
-    size_t ecx;
-    if (e->cx < line->size) {
-        c[0] = line->s[e->cx];
-        ecx = e->cx;
-    } else {
-        c[0] = ' ';
-        ecx = line->size;
-    }
-
-    tgr_add_text(tgr, c, vec2i(ecx, -e->cy), vec4fs(0.0f), vec4fs(1.0f));
-}
-
 const int keymap[] = {
     SDLK_LEFT,
     SDLK_RIGHT,
@@ -158,26 +144,133 @@ EditorKeys find_key(int code) {
     assert(0);
 }
 
+#ifdef TILE_GLYPH_RENDERER
+
 static Tile_Glyph_Renderer tgr = {0};
+
+void renderer_init(Tile_Glyph_Renderer *tgr)
+{
+    tgr_init(tgr, "charmap-oldschool_white.png", "shaders/tile_glyph.vert", 
+             "shaders/tile_glyph.frag");
+
+    glUniform2f(tgr->resolution, SCREEN_WIDTH, SCREEN_HEIGHT);
+    glUniform2f(tgr->scale, FONT_SCALE, FONT_SCALE);
+}
+
+void gl_render_cursor(Tile_Glyph_Renderer *tgr, Editor *e)
+{
+    const Line *line = list_get(&e->lines, e->cy);
+    char c[2] = {0};
+    size_t ecx;
+    if (e->cx < line->size) {
+        c[0] = line->s[e->cx];
+        ecx = e->cx;
+    } else {
+        c[0] = ' ';
+        ecx = line->size;
+    }
+
+    tgr_render_text(tgr, c, vec2i(ecx, -e->cy), vec4fs(0.0f), vec4fs(1.0f));
+}
+
+void renderer_draw(Tile_Glyph_Renderer *tgr, Editor *e, Vec2f camera_pos)
+{
+    glUniform1f(tgr->time, (float) SDL_GetTicks() / 1000.0f);
+    glUniform2f(tgr->camera, camera_pos.x, -camera_pos.y);
+
+    tgr_clear(tgr);
+    for (int cy = 0; cy < (int) e->lines.length; cy++) {
+        const Line *line = list_get(&e->lines, cy);
+        tgr_render_text(tgr, line->s, vec2i(0, -cy), vec4fs(1.0f), vec4fs(0.0f));
+    }
+    gl_render_cursor(tgr, e);
+    tgr_sync(tgr);
+
+    tgr_draw(tgr);
+}
+
+#else
+
+void FT_init(void)
+{
+#define ft_check_error                                          \
+    if (error) {                                                \
+        fprintf(stderr, "ERROR: %s", FT_Error_String(error));   \
+        exit(1);                                                \
+    }                                                           \
+
+    FT_Library library = {0};
+    FT_Error error = FT_Init_FreeType(&library);
+    ft_check_error
+
+    const char *font_filename = "fonts/VictorMono-Regular.ttf";
+    FT_Face face;
+    error = FT_New_Face(library, font_filename, 0, &face);
+    ft_check_error   
+
+    FT_UInt pixel_size = 128;
+    error = FT_Set_Pixel_Sizes(face, 0, pixel_size);
+    ft_check_error
+}
+
+static FreeType_Glyph_Renderer ftgr = {0};
+
+void renderer_init(FreeType_Glyph_Renderer *ftgr)
+{
+    ftgr_init(ftgr, "shaders/freetype_glyph.vert", "shaders/freetype_glyph.frag");
+}
+
+void gl_render_cursor(FreeType_Glyph_Renderer *ftgr, Editor *e)
+{
+    const Line *line = list_get(&e->lines, e->cy);
+    char c[2] = {0};
+    size_t ecx;
+    if (e->cx < line->size) {
+        c[0] = line->s[e->cx];
+        ecx = e->cx;
+    } else {
+        c[0] = ' ';
+        ecx = line->size;
+    }
+
+    ftgr_render_text(ftgr, c, vec2i(ecx, -e->cy), vec4fs(0.0f), vec4fs(1.0f));
+}
+
+void renderer_draw(FreeType_Glyph_Renderer *ftgr, Editor *e, Vec2f camera_pos)
+{
+    ftgr_clear(ftgr);
+    for (int cy = 0; cy < (int) e->lines.length; cy++) {
+        const Line *line = list_get(&e->lines, cy);
+        ftgr_render_text(ftgr, line->s, vec2i(0, -cy), vec4fs(1.0f), vec4fs(0.0f));
+    }
+    gl_render_cursor(ftgr, e);
+    ftgr_sync(ftgr);
+
+    ftgr_draw(ftgr);
+}
+
+#endif  // TILE_GLYPH_RENDERER
 
 int main(int argc, char *argv[])
 {
+    FT_init();
+
     scc(SDL_Init(SDL_INIT_VIDEO));
 
     gl_attr();
     SDL_Window *window;
     window = scp(
-        SDL_CreateWindow("Text Editor", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 
-                        SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL)
+        SDL_CreateWindow("ged: geimer editor", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 
+                         SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL)
     );
     scp(SDL_GL_CreateContext(window));
     init_glew();
 
-    tgr_init(&tgr, "charmap-oldschool_white.png", "shaders/tile_glyph.vert", 
-             "shaders/tile_glyph.frag");
-
-    glUniform2f(tgr.resolution, SCREEN_WIDTH, SCREEN_HEIGHT);
-    glUniform2f(tgr.scale, FONT_SCALE, FONT_SCALE);
+#ifdef TILE_GLYPH_RENDERER
+    renderer_init(&tgr);
+#else
+    renderer_init(&ftgr);
+#endif // TILE_GLYPH_RENDERER
 
     char *filename = NULL;
     if (argc > 1) {
@@ -250,7 +343,11 @@ int main(int argc, char *argv[])
                 case SDL_MOUSEWHEEL: {
                     camera_scale *= (event.wheel.y > 0) ? 1.05 : 0.95;
                     assert(camera_scale > 0);
+                    
+#ifdef TILE_GLYPH_RENDERER
                     glUniform2f(tgr.scale, camera_scale, camera_scale);
+#else
+#endif // TILE_GLYPH_RENDERER
                 } break;
             }
         }
@@ -259,7 +356,10 @@ int main(int argc, char *argv[])
             int w, h;
             SDL_GetWindowSize(window, &w, &h);
             glViewport(0, 0, w, h);
+#ifdef TILE_GLYPH_RENDERER
             glUniform2f(tgr.resolution, (float) w, (float) h);
+#else
+#endif // TILE_GLYPH_RENDERER
         }
 
         const Vec2f cursor_pos = vec2f(e.cx * FONT_CHAR_WIDTH  * camera_scale, 
@@ -271,18 +371,11 @@ int main(int argc, char *argv[])
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        glUniform1f(tgr.time, (float) SDL_GetTicks() / 1000.0f);
-        glUniform2f(tgr.camera, camera_pos.x, -camera_pos.y);
-
-        tgr_clear(&tgr);
-        for (int cy = 0; cy < (int) e.lines.length; cy++) {
-            const Line *line = list_get(&e.lines, cy);
-            tgr_add_text(&tgr, line->s, vec2i(0, -cy), vec4fs(1.0f), vec4fs(0.0f));
-        }
-        gl_render_cursor(&tgr, &e);
-        tgr_sync(&tgr);
-
-        tgr_draw(&tgr);
+#ifdef TILE_GLYPH_RENDERER
+        renderer_draw(&tgr, &e, camera_pos);
+#else
+        renderer_draw(&ftgr, &e, camera_pos);
+#endif // TILE_GLYPH_RENDERER
 
         const Uint32 duration = (SDL_GetTicks() - start);
         if (duration < DELTA_TIME_MS) {

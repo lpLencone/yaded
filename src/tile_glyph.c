@@ -13,6 +13,12 @@ typedef enum {
     COUNT_TILE_GLYPH_ATTRS,
 } Tile_Glyph_Attr;
 
+typedef struct {
+    size_t offset;
+    GLint  comps;
+    GLenum type;
+} Attr_Def;
+
 static const Attr_Def glyph_attr_defs[COUNT_TILE_GLYPH_ATTRS] = {
     [TILE_GLYPH_ATTR_TILE]  = {
         .offset = offsetof(Tile_Glyph, tile),
@@ -42,7 +48,7 @@ static void load_texture_atlas(Tile_Glyph_Renderer *tgr, const char *filename);
 static void init_shaders(Tile_Glyph_Renderer *tgr, const char *vert_filename, 
                          const char *frag_filename);
 
-static void buffer_push(Tile_Glyph_Renderer *tgr, Tile_Glyph glyph);
+static void glyph_push(Tile_Glyph_Renderer *tgr, Tile_Glyph glyph);
 
 void tgr_init(Tile_Glyph_Renderer *tgr, const char *atlas_filename, 
               const char *vert_filename, const char *frag_filename)
@@ -52,7 +58,7 @@ void tgr_init(Tile_Glyph_Renderer *tgr, const char *atlas_filename,
 
     glGenBuffers(1, &tgr->vbo);
     glBindBuffer(GL_ARRAY_BUFFER, tgr->vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(tgr->buffer), tgr->buffer, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(tgr->glyph), tgr->glyph, GL_DYNAMIC_DRAW);
 
     for (Tile_Glyph_Attr attr = 0; attr < COUNT_TILE_GLYPH_ATTRS; attr++) {
         glEnableVertexAttribArray(attr);
@@ -90,18 +96,18 @@ void tgr_init(Tile_Glyph_Renderer *tgr, const char *atlas_filename,
 
 void tgr_clear(Tile_Glyph_Renderer *tgr)
 {
-    tgr->buffer_count = 0;
+    tgr->glyph_count = 0;
 }
 
 void tgr_sync(Tile_Glyph_Renderer *tgr)
 {
     glBufferSubData(GL_ARRAY_BUFFER, 
                     0, 
-                    tgr->buffer_count * sizeof(Tile_Glyph), 
-                    tgr->buffer);
+                    tgr->glyph_count * sizeof(Tile_Glyph), 
+                    tgr->glyph);
 }
 
-void tgr_add_text(Tile_Glyph_Renderer *tgr, const char *s, Vec2i tile, 
+void tgr_render_text(Tile_Glyph_Renderer *tgr, const char *s, Vec2i tile, 
                   Vec4f fg_color, Vec4f bg_color)
 {
     size_t slen = strlen(s);
@@ -112,20 +118,20 @@ void tgr_add_text(Tile_Glyph_Renderer *tgr, const char *s, Vec2i tile,
             .fg_color = fg_color,
             .bg_color = bg_color,
         };
-        buffer_push(tgr, glyph);
+        glyph_push(tgr, glyph);
     }
 }
 
 void tgr_draw(Tile_Glyph_Renderer *tgr)
 {
-    glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, tgr->buffer_count);
+    glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, tgr->glyph_count);
 }
 
 /* static */
-static void buffer_push(Tile_Glyph_Renderer *tgr, Tile_Glyph glyph)
+static void glyph_push(Tile_Glyph_Renderer *tgr, Tile_Glyph glyph)
 {
-    assert(tgr->buffer_count < sizeof(tgr->buffer) / sizeof(Tile_Glyph));
-    tgr->buffer[tgr->buffer_count++] = glyph;
+    assert(tgr->glyph_count < sizeof(tgr->glyph) / sizeof(Tile_Glyph));
+    tgr->glyph[tgr->glyph_count++] = glyph;
 }
 
 static void load_texture_atlas(Tile_Glyph_Renderer *tgr, const char *filename)

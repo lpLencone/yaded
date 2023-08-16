@@ -16,12 +16,6 @@ typedef struct {
 } Tile_Glyph;
 
 typedef struct {
-    size_t offset;
-    GLint  comps;
-    GLenum type;
-} Attr_Def;
-
-typedef struct {
     GLuint font_texture;
     GLuint vao;
     GLuint vbo;
@@ -31,8 +25,8 @@ typedef struct {
     GLuint scale;
     GLuint camera;
 
-    Tile_Glyph buffer[TILE_GLYPH_BUFFER_CAPACITY];
-    size_t buffer_count;
+    Tile_Glyph glyph[TILE_GLYPH_BUFFER_CAPACITY];
+    size_t glyph_count;
 } Tile_Glyph_Renderer;
 
 void tgr_init(Tile_Glyph_Renderer *tgr, const char *atlas_filename, 
@@ -40,8 +34,8 @@ void tgr_init(Tile_Glyph_Renderer *tgr, const char *atlas_filename,
 
 void tgr_clear(Tile_Glyph_Renderer *tgr);
 void tgr_sync(Tile_Glyph_Renderer *tgr);
-void tgr_add_text(Tile_Glyph_Renderer *tgr, const char *s, Vec2i tile, 
-                  Vec4f fg_color, Vec4f bg_color);
+void tgr_render_text(Tile_Glyph_Renderer *tgr, const char *s, Vec2i tile, 
+                     Vec4f fg_color, Vec4f bg_color);
 void tgr_draw(Tile_Glyph_Renderer *tgr);
 
 
