@@ -255,6 +255,7 @@ void renderer_draw(FreeType_Glyph_Renderer *ftgr, Editor *e, Vec2f camera_pos)
         if (e->cy == cy) {
             ftgr_render_string_n(ftgr, line->s, e->cx, &pos, vec4fs(0.0f), vec4fs(1.0f));
             gl_render_cursor(ftgr, e, &pos);
+            ftgr_render_string(ftgr, &line->s[e->cx], &pos, vec4fs(0.0f), vec4fs(1.0f));
         }
         else {
             ftgr_render_string(ftgr, line->s, &pos, vec4fs(1.0f), vec4fs(0.0f));
