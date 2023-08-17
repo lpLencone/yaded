@@ -127,7 +127,6 @@ void tgr_draw(Tile_Glyph_Renderer *tgr)
     glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, tgr->glyph_count);
 }
 
-/* static */
 static void glyph_push(Tile_Glyph_Renderer *tgr, Tile_Glyph glyph)
 {
     assert(tgr->glyph_count < sizeof(tgr->glyph) / sizeof(Tile_Glyph));

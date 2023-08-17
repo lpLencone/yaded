@@ -6,8 +6,7 @@
 typedef enum {
     FT_GLYPH_ATTR_POS = 0,
     FT_GLYPH_ATTR_SIZE,
-    FT_GLYPH_ATTR_UV_POS,
-    FT_GLYPH_ATTR_UV_SIZE,
+    FT_GLYPH_ATTR_CH,
     FT_GLYPH_ATTR_FG_COLOR,
     FT_GLYPH_ATTR_BG_COLOR,
     COUNT_FT_GLYPH_ATTRS,
@@ -20,25 +19,20 @@ typedef struct {
 } Attr_Def;
 
 static const Attr_Def glyph_attr_defs[COUNT_FT_GLYPH_ATTRS] = {
-    [FT_GLYPH_ATTR_POS] = {
+    [FT_GLYPH_ATTR_POS]  = {
         .offset = offsetof(FreeType_Glyph, pos),
         .comps = 2,
         .type = GL_FLOAT,
     },
-    [FT_GLYPH_ATTR_SIZE] = {
+    [FT_GLYPH_ATTR_SIZE]  = {
         .offset = offsetof(FreeType_Glyph, size),
         .comps = 2,
         .type = GL_FLOAT,
     },
-    [FT_GLYPH_ATTR_UV_POS] = {
-        .offset = offsetof(FreeType_Glyph, uv_pos),
-        .comps = 2,
-        .type = GL_FLOAT,
-    },
-    [FT_GLYPH_ATTR_UV_SIZE] = {
-        .offset = offsetof(FreeType_Glyph, uv_size),
-        .comps = 2,
-        .type = GL_FLOAT,
+    [FT_GLYPH_ATTR_CH]    = {
+        .offset = offsetof(FreeType_Glyph, ch),
+        .comps = 1,
+        .type = GL_INT,
     },
     [FT_GLYPH_ATTR_FG_COLOR] = {
         .offset = offsetof(FreeType_Glyph, fg_color),
@@ -52,12 +46,11 @@ static const Attr_Def glyph_attr_defs[COUNT_FT_GLYPH_ATTRS] = {
     },
 };
 
-static_assert(COUNT_FT_GLYPH_ATTRS == 6, "The amount of glyph vertex attributes has changed");
+static_assert(COUNT_FT_GLYPH_ATTRS == 5, "The amount of glyph vertex attributes has changed");
 
 static void init_shaders(FreeType_Glyph_Renderer *ftgr, const char *vert_filename, 
                          const char *frag_filename);
 static void init_glyph_texture_atlas(FreeType_Glyph_Renderer *ftgr, FT_Face face);
-static void glyph_push(FreeType_Glyph_Renderer *ftgr, FreeType_Glyph glyph);
 
 void ftgr_init(FreeType_Glyph_Renderer *ftgr, FT_Face face,
                const char *vert_filename, const char *frag_filename)
@@ -101,8 +94,6 @@ void ftgr_init(FreeType_Glyph_Renderer *ftgr, FT_Face face,
         init_shaders(ftgr, vert_filename, frag_filename);
     }
 
-    ftgr->atlas_w = 0;
-    ftgr->atlas_h = 0;
     init_glyph_texture_atlas(ftgr, face);
 }
 
@@ -117,37 +108,11 @@ void ftgr_sync(FreeType_Glyph_Renderer *ftgr)
                     ftgr->glyph);
 }
 
-void ftgr_render_string_n(FreeType_Glyph_Renderer *ftgr, const char *s, size_t n,
-                          Vec2f *pos, Vec4f fg_color, Vec4f bg_color)
+void ftgr_render_text(FreeType_Glyph_Renderer *ftgr, const char *s, Vec2i tile, 
+                   Vec4f fg_color, Vec4f bg_color)
 {
-    size_t slen = strlen(s);
-    for (size_t i = 0; i < slen; i++) {
-        Glyph_Info gi = ftgr->gi[(int) s[i]];
-        float x2 = pos->x + gi.bl;
-        float y2 = -pos->y - gi.bt;
-        float w  = gi.bw;
-        float h  = gi.bh;
-
-        pos->x += gi.ax;
-        pos->y += gi.ay;
-
-        FreeType_Glyph glyph = {
-            .pos        = vec2f(x2, -y2),
-            .size       = vec2f(w, -h),
-            .uv_pos     = vec2f(gi.tx, 0.0f),
-            .uv_size    = vec2f(gi.bw / (float) ftgr->atlas_w, gi.bh / (float) ftgr->atlas_h),
-            .bg_color   = bg_color,
-            .fg_color   = fg_color,
-        };
-
-        glyph_push(ftgr, glyph);
-    }
-}
-
-void ftgr_render_string(FreeType_Glyph_Renderer *ftgr, const char *s, Vec2f *pos, 
-                        Vec4f fg_color, Vec4f bg_color)
-{
-    ftgr_render_string_n(ftgr, s, strlen(s), pos, fg_color, bg_color);
+    (void) ftgr;
+    (void) s, (void) tile, (void) fg_color, (void) bg_color;
 }
 
 void ftgr_draw(FreeType_Glyph_Renderer *ftgr)
@@ -188,6 +153,9 @@ static void init_shaders(FreeType_Glyph_Renderer *ftgr, const char *vert_filenam
 
 static void init_glyph_texture_atlas(FreeType_Glyph_Renderer *ftgr, FT_Face face)
 {
+    FT_UInt atlas_w = 0;
+    FT_UInt atlas_h = 0;
+    
     for (size_t i = 32; i < 128; i++) {
         FT_Error error;
         if ((error = FT_Load_Char(face, i, FT_LOAD_RENDER))) {
@@ -199,9 +167,9 @@ static void init_glyph_texture_atlas(FreeType_Glyph_Renderer *ftgr, FT_Face face
             exit(1);
         }
 
-        ftgr->atlas_w += face->glyph->bitmap.width;
-        if (ftgr->atlas_h < face->glyph->bitmap.rows) {
-            ftgr->atlas_h = face->glyph->bitmap.rows;
+        atlas_w += face->glyph->bitmap.width;
+        if (atlas_h < face->glyph->bitmap.rows) {
+            atlas_h = face->glyph->bitmap.rows;
         }
     }
 
@@ -209,11 +177,11 @@ static void init_glyph_texture_atlas(FreeType_Glyph_Renderer *ftgr, FT_Face face
     glGenTextures(1, &ftgr->glyph_texture);
     glBindTexture(GL_TEXTURE_2D, ftgr->glyph_texture);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, ftgr->atlas_w, ftgr->atlas_h, 0, 
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, atlas_w, atlas_h, 0, 
                  GL_RED, GL_UNSIGNED_BYTE, NULL);
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
@@ -231,7 +199,7 @@ static void init_glyph_texture_atlas(FreeType_Glyph_Renderer *ftgr, FT_Face face
         ftgr->gi[i].bh = face->glyph->bitmap.rows;
         ftgr->gi[i].bl = face->glyph->bitmap_left;
         ftgr->gi[i].bt = face->glyph->bitmap_top;
-        ftgr->gi[i].tx = (float) x / (float) ftgr->atlas_w;
+        ftgr->gi[i].tx = (float) x / (float) atlas_w;
 
         glTexSubImage2D(GL_TEXTURE_2D, 0, x, 0, face->glyph->bitmap.width, 
                         face->glyph->bitmap.rows, GL_RED, GL_UNSIGNED_BYTE, 

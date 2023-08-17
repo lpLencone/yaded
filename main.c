@@ -9,7 +9,6 @@
 #define GL_GLEXT_PROTOTYPES
 #include <SDL2/SDL_opengl.h>
 
-
 #include "la.h"
 #include "editor.h"
 #include "gl_extra.h"
@@ -19,11 +18,9 @@
 #ifdef TILE_GLYPH_RENDERER
 #include "tile_glyph.h"
 #else 
-#include <ft2build.h>
-#include <freetype/freetype.h>
-// #include <freetype/ftoutln.h>
-
 #include "freetype_glyph.h"
+#define FONT_SIZE           32
+#define FONT_FILENAME       "./fonts/TSCu_Times.ttf"
 #endif
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -191,7 +188,7 @@ void renderer_draw(Tile_Glyph_Renderer *tgr, Editor *e, Vec2f camera_pos)
 
 #else
 
-void FT_init(void)
+FT_Face FT_init(void)
 {
 #define ft_check_error                                          \
     if (error) {                                                \
@@ -203,49 +200,68 @@ void FT_init(void)
     FT_Error error = FT_Init_FreeType(&library);
     ft_check_error
 
-    const char *font_filename = "fonts/VictorMono-Regular.ttf";
+    const char *font_filename = FONT_FILENAME;
     FT_Face face;
     error = FT_New_Face(library, font_filename, 0, &face);
     ft_check_error   
 
-    FT_UInt pixel_size = 128;
+    FT_UInt pixel_size = FONT_SIZE;
     error = FT_Set_Pixel_Sizes(face, 0, pixel_size);
     ft_check_error
+
+    return face;
+#undef ft_check_error
 }
 
 static FreeType_Glyph_Renderer ftgr = {0};
 
-void renderer_init(FreeType_Glyph_Renderer *ftgr)
+void renderer_init(FreeType_Glyph_Renderer *ftgr, FT_Face face)
 {
-    ftgr_init(ftgr, "shaders/freetype_glyph.vert", "shaders/freetype_glyph.frag");
+    ftgr_init(ftgr, face, "shaders/freetype_glyph.vert", "shaders/freetype_glyph.frag");
+    glUniform2f(ftgr->resolution, SCREEN_WIDTH, SCREEN_HEIGHT);
 }
 
-void gl_render_cursor(FreeType_Glyph_Renderer *ftgr, Editor *e)
+void gl_render_cursor(FreeType_Glyph_Renderer *ftgr, Editor *e, Vec2f *pos)
 {
     const Line *line = list_get(&e->lines, e->cy);
-    char c[2] = {0};
     size_t ecx;
+
+    const char *p;
     if (e->cx < line->size) {
-        c[0] = line->s[e->cx];
+        p = &line->s[e->cx];
         ecx = e->cx;
     } else {
-        c[0] = ' ';
+        p = " ";
         ecx = line->size;
     }
 
-    ftgr_render_text(ftgr, c, vec2i(ecx, -e->cy), vec4fs(0.0f), vec4fs(1.0f));
+    ftgr_render_string_n(ftgr, p, 1, pos, vec4fs(0.0f), vec4fs(1.0f));
 }
 
 void renderer_draw(FreeType_Glyph_Renderer *ftgr, Editor *e, Vec2f camera_pos)
 {
-    ftgr_clear(ftgr);
-    for (int cy = 0; cy < (int) e->lines.length; cy++) {
-        const Line *line = list_get(&e->lines, cy);
-        ftgr_render_text(ftgr, line->s, vec2i(0, -cy), vec4fs(1.0f), vec4fs(0.0f));
-    }
-    gl_render_cursor(ftgr, e);
-    ftgr_sync(ftgr);
+    glUniform2f(ftgr->camera, 0.0f, 0.0f);
+    glUniform1f(ftgr->time, (float) SDL_GetTicks() / 1000.0f);
+    glUniform2f(ftgr->camera, camera_pos.x, -camera_pos.y);
 
+    ftgr_clear(ftgr);
+    
+    Vec2f pos = {0};
+    for (int cy = 0; cy < (int) e->lines.length; cy++) {
+        pos.x = 0.0f;
+        pos.y = (float) -cy * FONT_SIZE;
+        const Line *line = list_get(&e->lines, cy);
+
+        if (e->cy == cy) {
+            ftgr_render_string_n(ftgr, line->s, e->cx, &pos, vec4fs(0.0f), vec4fs(1.0f));
+            gl_render_cursor(ftgr, e, &pos);
+        }
+        else {
+            ftgr_render_string(ftgr, line->s, &pos, vec4fs(1.0f), vec4fs(0.0f));
+        }
+    }
+
+    ftgr_sync(ftgr);
     ftgr_draw(ftgr);
 }
 
@@ -253,7 +269,9 @@ void renderer_draw(FreeType_Glyph_Renderer *ftgr, Editor *e, Vec2f camera_pos)
 
 int main(int argc, char *argv[])
 {
-    FT_init();
+#ifndef TILE_GLYPH_RENDERER
+    FT_Face face = FT_init();
+#endif // TILE_GLYPH_RENDERER
 
     scc(SDL_Init(SDL_INIT_VIDEO));
 
@@ -269,7 +287,7 @@ int main(int argc, char *argv[])
 #ifdef TILE_GLYPH_RENDERER
     renderer_init(&tgr);
 #else
-    renderer_init(&ftgr);
+    renderer_init(&ftgr, face);
 #endif // TILE_GLYPH_RENDERER
 
     char *filename = NULL;
@@ -359,6 +377,7 @@ int main(int argc, char *argv[])
 #ifdef TILE_GLYPH_RENDERER
             glUniform2f(tgr.resolution, (float) w, (float) h);
 #else
+            glUniform2f(ftgr.resolution, (float) w, (float) h);
 #endif // TILE_GLYPH_RENDERER
         }
 
