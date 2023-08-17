@@ -60,9 +60,11 @@ void ftgr_init(FreeType_Glyph_Renderer *ftgr, FT_Face face,
 void ftgr_clear(FreeType_Glyph_Renderer *ftgr);
 void ftgr_sync(FreeType_Glyph_Renderer *ftgr);
 void ftgr_render_string_n(FreeType_Glyph_Renderer *ftgr, const char *s, size_t n,
-                          Vec2f *pos, Vec4f fg_color, Vec4f bg_color);
-void ftgr_render_string(FreeType_Glyph_Renderer *ftgr, const char *s, Vec2f *pos, 
+                          Vec2f pos, Vec4f fg_color, Vec4f bg_color);
+void ftgr_render_string(FreeType_Glyph_Renderer *ftgr, const char *s, Vec2f pos, 
                         Vec4f fg_color, Vec4f bg_color);
+
+float ftgr_get_string_width_n(FreeType_Glyph_Renderer *ftgr, const char *s, size_t n); 
 
 void ftgr_draw(FreeType_Glyph_Renderer *ftgr);
 

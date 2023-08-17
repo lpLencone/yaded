@@ -113,19 +113,18 @@ void editor_delete_char(Editor *e)
     }
 }
 
-void editor_new_line(Editor *e)
-{
-    Line line = line_init();
-    list_insert(&e->lines, &line, sizeof(line), e->cy + 1);
-    break_line(e);
-    editor_move(e, EDITOR_RIGHT);
-}
-
-size_t get_line_length(Editor *e)
+size_t editor_get_line_size(Editor *e)
 {
     Line *line = list_get(&e->lines, e->cy);
     return (line == NULL) ? 0: line->size;
 }
+
+const char *editor_get_line_s(Editor *e)
+{
+    Line *line = list_get(&e->lines, e->cy);
+    return (line == NULL) ? NULL: line->s;
+}
+
 
 /* Line operations */
 
@@ -162,11 +161,19 @@ static void break_line(Editor *e)
     }
 }
 
+static void new_line(Editor *e)
+{
+    Line line = line_init();
+    list_insert(&e->lines, &line, sizeof(line), e->cy + 1);
+    break_line(e);
+    editor_move(e, EDITOR_RIGHT);
+}
+
 /* Editor Operations */
 
 static void editor_move(Editor *e, EditorKeys key)
 {
-    size_t line_size = get_line_length(e);
+    size_t line_size = editor_get_line_size(e);
     switch (key) {
         case EDITOR_LEFT: {
             if (e->cx > 0) {
@@ -233,7 +240,7 @@ static void editor_edit(Editor *e, EditorKeys key)
 
         case EDITOR_DELETE: {
             if (e->cy + 1 < e->lines.length ||
-                e->cx < get_line_length(e)) 
+                e->cx < editor_get_line_size(e)) 
             {
                 editor_move(e, EDITOR_RIGHT);
                 editor_delete_char(e);
@@ -241,7 +248,7 @@ static void editor_edit(Editor *e, EditorKeys key)
         } break;
 
         case EDITOR_RETURN: {
-            editor_new_line(e);
+            new_line(e);
         } break;
 
         case EDITOR_TAB: {
@@ -318,7 +325,7 @@ static void open_file(Editor *e)
                 sv_c_str(c_chunk, chunk_line);
 
                 editor_insert_text(e, c_chunk);
-                editor_new_line(e);
+                new_line(e);
             } else {
                 sv_c_str(c_chunk, chunk_line);
                 

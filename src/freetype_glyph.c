@@ -118,18 +118,17 @@ void ftgr_sync(FreeType_Glyph_Renderer *ftgr)
 }
 
 void ftgr_render_string_n(FreeType_Glyph_Renderer *ftgr, const char *s, size_t n,
-                          Vec2f *pos, Vec4f fg_color, Vec4f bg_color)
+                          Vec2f pos, Vec4f fg_color, Vec4f bg_color)
 {
-    size_t slen = strlen(s);
-    for (size_t i = 0; i < slen; i++) {
+    for (size_t i = 0; i < n; i++) {
         Glyph_Info gi = ftgr->gi[(int) s[i]];
-        float x2 = pos->x + gi.bl;
-        float y2 = -pos->y - gi.bt;
+        float x2 = pos.x + gi.bl;
+        float y2 = -pos.y - gi.bt;
         float w  = gi.bw;
         float h  = gi.bh;
 
-        pos->x += gi.ax;
-        pos->y += gi.ay;
+        pos.x += gi.ax;
+        pos.y += gi.ay;
 
         FreeType_Glyph glyph = {
             .pos        = vec2f(x2, -y2),
@@ -144,7 +143,7 @@ void ftgr_render_string_n(FreeType_Glyph_Renderer *ftgr, const char *s, size_t n
     }
 }
 
-void ftgr_render_string(FreeType_Glyph_Renderer *ftgr, const char *s, Vec2f *pos, 
+void ftgr_render_string(FreeType_Glyph_Renderer *ftgr, const char *s, Vec2f pos, 
                         Vec4f fg_color, Vec4f bg_color)
 {
     ftgr_render_string_n(ftgr, s, strlen(s), pos, fg_color, bg_color);
@@ -153,6 +152,16 @@ void ftgr_render_string(FreeType_Glyph_Renderer *ftgr, const char *s, Vec2f *pos
 void ftgr_draw(FreeType_Glyph_Renderer *ftgr)
 {
     glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, ftgr->glyph_count);
+}
+
+float ftgr_get_string_width_n(FreeType_Glyph_Renderer *ftgr, const char *s, size_t n)
+{
+    float width = 0;
+    for (size_t i = 0; i < n; i++) {
+        Glyph_Info gi = ftgr->gi[(int) s[i]];
+        width += gi.ax;
+    }
+    return width;
 }
 
 static void glyph_push(FreeType_Glyph_Renderer *ftgr, FreeType_Glyph glyph)

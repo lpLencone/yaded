@@ -20,7 +20,7 @@
 #else 
 #include "freetype_glyph.h"
 #define FONT_SIZE           32
-#define FONT_FILENAME       "./fonts/TSCu_Times.ttf"
+#define FONT_FILENAME       "./fonts/VictorMono-Regular.ttf"
 #endif
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -188,6 +188,14 @@ void renderer_draw(Tile_Glyph_Renderer *tgr, Editor *e, Vec2f camera_pos)
 
 #else
 
+typedef struct {
+    struct {
+        Vec2f pos;
+        Vec2f vel;
+    } camera;
+    Vec2f cursor;
+} Screen;
+
 FT_Face FT_init(void)
 {
 #define ft_check_error                                          \
@@ -221,49 +229,39 @@ void renderer_init(FreeType_Glyph_Renderer *ftgr, FT_Face face)
     glUniform2f(ftgr->resolution, SCREEN_WIDTH, SCREEN_HEIGHT);
 }
 
-void gl_render_cursor(FreeType_Glyph_Renderer *ftgr, Editor *e, Vec2f *pos)
+void gl_render_cursor(FreeType_Glyph_Renderer *ftgr, Editor *e, Screen *scr)
 {
     const Line *line = list_get(&e->lines, e->cy);
-    size_t ecx;
 
     const char *p;
     if (e->cx < line->size) {
         p = &line->s[e->cx];
-        ecx = e->cx;
     } else {
         p = " ";
-        ecx = line->size;
     }
-
-    ftgr_render_string_n(ftgr, p, 1, pos, vec4fs(0.0f), vec4fs(1.0f));
+    ftgr_render_string_n(ftgr, p, 1, scr->cursor, vec4fs(0.0f), vec4fs(1.0f));
 }
 
-void renderer_draw(FreeType_Glyph_Renderer *ftgr, Editor *e, Vec2f camera_pos)
+void renderer_draw(FreeType_Glyph_Renderer *ftgr, Editor *e, Screen *scr)
 {
     glUniform2f(ftgr->camera, 0.0f, 0.0f);
     glUniform1f(ftgr->time, (float) SDL_GetTicks() / 1000.0f);
-    glUniform2f(ftgr->camera, camera_pos.x, -camera_pos.y);
+    glUniform2f(ftgr->camera, scr->camera.pos.x, -scr->camera.pos.y);
 
     ftgr_clear(ftgr);
     
     Vec2f pos = {0};
-    for (int cy = 0; cy < (int) e->lines.length; cy++) {
+    for (size_t cy = 0; cy < e->lines.length; cy++) {
         pos.x = 0.0f;
-        pos.y = (float) -cy * FONT_SIZE;
-        const Line *line = list_get(&e->lines, cy);
-
-        if (e->cy == cy) {
-            ftgr_render_string_n(ftgr, line->s, e->cx, &pos, vec4fs(0.0f), vec4fs(1.0f));
-            gl_render_cursor(ftgr, e, &pos);
-            ftgr_render_string(ftgr, &line->s[e->cx], &pos, vec4fs(0.0f), vec4fs(1.0f));
-        }
-        else {
-            ftgr_render_string(ftgr, line->s, &pos, vec4fs(1.0f), vec4fs(0.0f));
-        }
+        pos.y = - (float) cy * FONT_SIZE;
+        const char *s = editor_get_line_s(e);
+        ftgr_render_string(ftgr, s, pos, vec4fs(1.0f), vec4fs(0.0f));
     }
 
     ftgr_sync(ftgr);
     ftgr_draw(ftgr);
+
+    gl_render_cursor(ftgr, e, scr);
 }
 
 #endif  // TILE_GLYPH_RENDERER
@@ -297,9 +295,7 @@ int main(int argc, char *argv[])
     }
 
     Editor e = editor_init(filename);
-    Vec2f camera_pos = {0};
-    Vec2f camera_vel = {0};
-    float camera_scale = FONT_SCALE;
+    Screen scr = {0};
 
     bool quit = false;
     while (!quit) {
@@ -345,29 +341,32 @@ int main(int argc, char *argv[])
                             SDL_GetWindowSize(window, &w, &h);
                             Vec2f cursor_coord = vec2f_add(
                                 mouse_coord, 
-                                vec2f_sub(camera_pos, vec2f(w / 2.0f, h / 2.0f))
+                                vec2f_sub(scr.camera.pos, vec2f(w / 2.0f, h / 2.0f))
                             );
-                            
+
+#ifdef TILE_GLYPH_RENDERER
                             int truex = (int) floorf(cursor_coord.x / (FONT_CHAR_WIDTH * camera_scale)); 
-                            if (truex < 0) truex = 0;
-
                             int truey = (int) floorf(cursor_coord.y / (FONT_CHAR_HEIGHT * camera_scale)) + 1;
+#else
+                            int truex = (int) floorf(cursor_coord.x / 
+                                    ftgr_get_string_width_n(&ftgr, editor_get_line_s(&e), e.cx));
+                            int truey = e.cy * FONT_SIZE;
+#endif // TILE_GLYPH_RENDERER
+                            if (truex < 0) truex = 0;
                             if (truey < 0) truey = 0;
-
                             editor_click(&e, truex, truey);
                         } break;
                     }
                 } break;
 
+#ifdef TILE_GLYPH_RENDERER
                 case SDL_MOUSEWHEEL: {
                     camera_scale *= (event.wheel.y > 0) ? 1.05 : 0.95;
                     assert(camera_scale > 0);
                     
-#ifdef TILE_GLYPH_RENDERER
                     glUniform2f(tgr.scale, camera_scale, camera_scale);
-#else
-#endif // TILE_GLYPH_RENDERER
                 } break;
+#endif // TILE_GLYPH_RENDERER
             }
         }
 
@@ -382,11 +381,12 @@ int main(int argc, char *argv[])
 #endif // TILE_GLYPH_RENDERER
         }
 
-        const Vec2f cursor_pos = vec2f(e.cx * FONT_CHAR_WIDTH  * camera_scale, 
-                                       e.cy * FONT_CHAR_HEIGHT * camera_scale);
-
-        camera_vel = vec2f_mul(vec2f_sub(cursor_pos, camera_pos), vec2fs(2.0f));
-        camera_pos = vec2f_add(camera_pos, vec2f_mul(camera_vel, vec2fs(DELTA_TIME)));
+        const char *s = editor_get_line_s(&e);
+        scr.cursor.x = ftgr_get_string_width_n(&ftgr, s, e.cx);
+        scr.cursor.y = e.cy * FONT_SIZE;
+        
+        scr.camera.vel = vec2f_mul(vec2f_sub(scr.cursor, scr.camera.pos), vec2fs(2.0f));
+        scr.camera.pos = vec2f_add(scr.camera.pos, vec2f_mul(scr.camera.vel, vec2fs(DELTA_TIME)));
 
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
@@ -394,7 +394,7 @@ int main(int argc, char *argv[])
 #ifdef TILE_GLYPH_RENDERER
         renderer_draw(&tgr, &e, camera_pos);
 #else
-        renderer_draw(&ftgr, &e, camera_pos);
+        renderer_draw(&ftgr, &e, &scr);
 #endif // TILE_GLYPH_RENDERER
 
         const Uint32 duration = (SDL_GetTicks() - start);
