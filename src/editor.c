@@ -119,10 +119,15 @@ size_t editor_get_line_size(Editor *e)
     return (line == NULL) ? 0: line->size;
 }
 
-const char *editor_get_line_s(Editor *e)
+const char *editor_get_line_at(Editor *e, size_t at)
 {
-    Line *line = list_get(&e->lines, e->cy);
+    Line *line = list_get(&e->lines, at);
     return (line == NULL) ? NULL: line->s;
+}
+
+const char *editor_get_line(Editor *e)
+{
+    return editor_get_line_at(e, e->cy);
 }
 
 

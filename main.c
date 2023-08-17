@@ -232,6 +232,7 @@ void renderer_init(FreeType_Glyph_Renderer *ftgr, FT_Face face)
 void gl_render_cursor(FreeType_Glyph_Renderer *ftgr, Editor *e, Screen *scr)
 {
     const Line *line = list_get(&e->lines, e->cy);
+    Vec2f cursor_pos = scr->cursor;
 
     const char *p;
     if (e->cx < line->size) {
@@ -239,12 +240,13 @@ void gl_render_cursor(FreeType_Glyph_Renderer *ftgr, Editor *e, Screen *scr)
     } else {
         p = " ";
     }
-    ftgr_render_string_n(ftgr, p, 1, scr->cursor, vec4fs(0.0f), vec4fs(1.0f));
+
+    cursor_pos.y = -cursor_pos.y;
+    ftgr_render_string_n(ftgr, p, 1, cursor_pos, vec4fs(0.0f), vec4fs(1.0f));
 }
 
 void renderer_draw(FreeType_Glyph_Renderer *ftgr, Editor *e, Screen *scr)
 {
-    glUniform2f(ftgr->camera, 0.0f, 0.0f);
     glUniform1f(ftgr->time, (float) SDL_GetTicks() / 1000.0f);
     glUniform2f(ftgr->camera, scr->camera.pos.x, -scr->camera.pos.y);
 
@@ -254,14 +256,14 @@ void renderer_draw(FreeType_Glyph_Renderer *ftgr, Editor *e, Screen *scr)
     for (size_t cy = 0; cy < e->lines.length; cy++) {
         pos.x = 0.0f;
         pos.y = - (float) cy * FONT_SIZE;
-        const char *s = editor_get_line_s(e);
+        const char *s = editor_get_line_at(e, cy);
         ftgr_render_string(ftgr, s, pos, vec4fs(1.0f), vec4fs(0.0f));
     }
+    gl_render_cursor(ftgr, e, scr);
 
     ftgr_sync(ftgr);
     ftgr_draw(ftgr);
 
-    gl_render_cursor(ftgr, e, scr);
 }
 
 #endif  // TILE_GLYPH_RENDERER
@@ -296,6 +298,8 @@ int main(int argc, char *argv[])
 
     Editor e = editor_init(filename);
     Screen scr = {0};
+
+    size_t last_ecx = 0;
 
     bool quit = false;
     while (!quit) {
@@ -349,7 +353,7 @@ int main(int argc, char *argv[])
                             int truey = (int) floorf(cursor_coord.y / (FONT_CHAR_HEIGHT * camera_scale)) + 1;
 #else
                             int truex = (int) floorf(cursor_coord.x / 
-                                    ftgr_get_string_width_n(&ftgr, editor_get_line_s(&e), e.cx));
+                                    ftgr_get_string_width_n(&ftgr, editor_get_line(&e), e.cx));
                             int truey = e.cy * FONT_SIZE;
 #endif // TILE_GLYPH_RENDERER
                             if (truex < 0) truex = 0;
@@ -381,8 +385,10 @@ int main(int argc, char *argv[])
 #endif // TILE_GLYPH_RENDERER
         }
 
-        const char *s = editor_get_line_s(&e);
-        scr.cursor.x = ftgr_get_string_width_n(&ftgr, s, e.cx);
+        if (e.cx != last_ecx) {
+            scr.cursor.x = ftgr_get_string_width_n(&ftgr, editor_get_line(&e), e.cx);
+            last_ecx = e.cx;
+        }
         scr.cursor.y = e.cy * FONT_SIZE;
         
         scr.camera.vel = vec2f_mul(vec2f_sub(scr.cursor, scr.camera.pos), vec2fs(2.0f));

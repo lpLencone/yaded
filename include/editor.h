@@ -37,6 +37,7 @@ void editor_process_key(Editor *e, EditorKeys key);
 void editor_click(Editor *e, size_t x, size_t y);
 
 size_t editor_get_line_size(Editor *e);
-const char *editor_get_line_s(Editor *e);
+const char *editor_get_line(Editor *e);
+const char *editor_get_line_at(Editor *e, size_t at);
 
 #endif // YADED_EDITOR_H_
