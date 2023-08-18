@@ -20,7 +20,8 @@
 #else 
 #include "freetype_glyph.h"
 #define FONT_SIZE           32
-#define FONT_FILENAME       "./fonts/VictorMono-Regular.ttf"
+// #define FONT_FILENAME       "./fonts/VictorMono-Regular.ttf"
+#define FONT_FILENAME       "./fonts/TSCu_Comic.ttf"
 #endif
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -39,6 +40,14 @@
 #define FONT_CHAR_WIDTH     (FONT_WIDTH  / FONT_COLS)
 #define FONT_CHAR_HEIGHT    (FONT_HEIGHT / FONT_ROWS)
 #define FONT_SCALE          3.0f
+
+typedef struct {
+    struct {
+        Vec2f pos;
+        Vec2f vel;
+    } camera;
+    Vec2f cursor;
+} Screen;
 
 // SDL check codes
 void scc(int code)
@@ -188,14 +197,6 @@ void renderer_draw(Tile_Glyph_Renderer *tgr, Editor *e, Vec2f camera_pos)
 
 #else
 
-typedef struct {
-    struct {
-        Vec2f pos;
-        Vec2f vel;
-    } camera;
-    Vec2f cursor;
-} Screen;
-
 FT_Face FT_init(void)
 {
 #define ft_check_error                                          \
@@ -272,6 +273,7 @@ int main(int argc, char *argv[])
 {
 #ifndef TILE_GLYPH_RENDERER
     FT_Face face = FT_init();
+#else
 #endif // TILE_GLYPH_RENDERER
 
     scc(SDL_Init(SDL_INIT_VIDEO));
@@ -286,6 +288,7 @@ int main(int argc, char *argv[])
     init_glew();
 
 #ifdef TILE_GLYPH_RENDERER
+    float camera_scale = FONT_SCALE;
     renderer_init(&tgr);
 #else
     renderer_init(&ftgr, face);
@@ -348,16 +351,20 @@ int main(int argc, char *argv[])
                                 vec2f_sub(scr.camera.pos, vec2f(w / 2.0f, h / 2.0f))
                             );
 
+
 #ifdef TILE_GLYPH_RENDERER
                             int truex = (int) floorf(cursor_coord.x / (FONT_CHAR_WIDTH * camera_scale)); 
                             int truey = (int) floorf(cursor_coord.y / (FONT_CHAR_HEIGHT * camera_scale)) + 1;
 #else
-                            int truex = (int) floorf(cursor_coord.x / 
-                                    ftgr_get_string_width_n(&ftgr, editor_get_line(&e), e.cx));
-                            int truey = e.cy * FONT_SIZE;
+                            cursor_coord.y += FONT_SIZE;
+                            int truey = (int) floorf(cursor_coord.y / FONT_SIZE);
+                            const char *s = editor_get_line_at(&e, truey);
+                            int truex = (s == NULL) ? 0 : (int) ftgr_get_glyph_index(&ftgr, s, cursor_coord.x);
+              
 #endif // TILE_GLYPH_RENDERER
                             if (truex < 0) truex = 0;
                             if (truey < 0) truey = 0;
+
                             editor_click(&e, truex, truey);
                         } break;
                     }
@@ -385,12 +392,14 @@ int main(int argc, char *argv[])
 #endif // TILE_GLYPH_RENDERER
         }
 
+#ifndef TILE_GLYPH_RENDERER
         if (e.cx != last_ecx) {
             scr.cursor.x = ftgr_get_string_width_n(&ftgr, editor_get_line(&e), e.cx);
             last_ecx = e.cx;
         }
         scr.cursor.y = e.cy * FONT_SIZE;
-        
+#endif // TILE_GLYPH_RENDERER
+
         scr.camera.vel = vec2f_mul(vec2f_sub(scr.cursor, scr.camera.pos), vec2fs(2.0f));
         scr.camera.pos = vec2f_add(scr.camera.pos, vec2f_mul(scr.camera.vel, vec2fs(DELTA_TIME)));
 
@@ -398,7 +407,10 @@ int main(int argc, char *argv[])
         glClear(GL_COLOR_BUFFER_BIT);
 
 #ifdef TILE_GLYPH_RENDERER
-        renderer_draw(&tgr, &e, camera_pos);
+        scr.cursor = vec2f(e.cx * FONT_CHAR_WIDTH * camera_scale,
+                           e.cy * FONT_CHAR_HEIGHT * camera_scale);
+
+        renderer_draw(&tgr, &e, scr.camera.pos);
 #else
         renderer_draw(&ftgr, &e, &scr);
 #endif // TILE_GLYPH_RENDERER

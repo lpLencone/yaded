@@ -117,6 +117,18 @@ void ftgr_sync(FreeType_Glyph_Renderer *ftgr)
                     ftgr->glyph);
 }
 
+size_t ftgr_get_glyph_index(FreeType_Glyph_Renderer *ftgr, const char *s, size_t width_lim)
+{
+    size_t i;
+    for (i = 0; i <= strlen(s); i++) {
+        float this_width = ftgr_get_string_width_n(ftgr, s, i);
+        if (this_width > width_lim) {
+            return (i > 0) ? i - 1 : 0;
+        }
+    }
+    return i;
+}
+
 void ftgr_render_string_n(FreeType_Glyph_Renderer *ftgr, const char *s, size_t n,
                           Vec2f pos, Vec4f fg_color, Vec4f bg_color)
 {

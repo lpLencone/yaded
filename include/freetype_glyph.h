@@ -65,6 +65,8 @@ void ftgr_render_string(FreeType_Glyph_Renderer *ftgr, const char *s, Vec2f pos,
                         Vec4f fg_color, Vec4f bg_color);
 
 float ftgr_get_string_width_n(FreeType_Glyph_Renderer *ftgr, const char *s, size_t n); 
+size_t ftgr_get_glyph_index(FreeType_Glyph_Renderer *ftgr, const char *s, size_t width_lim);
+
 
 void ftgr_draw(FreeType_Glyph_Renderer *ftgr);
 
