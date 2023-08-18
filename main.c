@@ -402,7 +402,7 @@ int main(int argc, char *argv[])
             vec2f_sub(scr.cursor.render_pos, scr.cursor.actual_pos),
             vec2fs(2.0f)
         );
-        scr.cursor.render_pos = vec2f_add(
+        scr.cursor.render_pos = vec2f_sub(
             scr.cursor.render_pos,
             vec2f_mul(scr.cursor.vel, vec2fs(DELTA_TIME))
         );
