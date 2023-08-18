@@ -36,7 +36,7 @@ void main() {
         1.0
     );
 
-    gl_FragColor = glyph_bg_color * (1.0 - tc.x) + tc.x * glyph_fg_color * rainbow;
+    gl_FragColor = tc.x * glyph_fg_color * rainbow;
 }
 
 // vec4 rainbow = vec4(

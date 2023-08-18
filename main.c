@@ -19,6 +19,7 @@
 #include "tile_glyph.h"
 #else 
 #include "freetype_glyph.h"
+#include "cursor_renderer.h"
 #define FONT_SIZE           32
 // #define FONT_FILENAME       "./fonts/VictorMono-Regular.ttf"
 #define FONT_FILENAME       "./fonts/TSCu_Comic.ttf"
@@ -222,8 +223,6 @@ FT_Face FT_init(void)
 #undef ft_check_error
 }
 
-static FreeType_Glyph_Renderer ftgr = {0};
-
 void renderer_init(FreeType_Glyph_Renderer *ftgr, FT_Face face)
 {
     ftgr_init(ftgr, face, "shaders/freetype_glyph.vert", "shaders/freetype_glyph.frag");
@@ -246,8 +245,13 @@ void gl_render_cursor(FreeType_Glyph_Renderer *ftgr, Editor *e, Screen *scr)
     ftgr_render_string_n(ftgr, p, 1, cursor_pos, vec4fs(0.0f), vec4fs(1.0f));
 }
 
-void renderer_draw(FreeType_Glyph_Renderer *ftgr, Editor *e, Screen *scr)
+void renderer_draw(FreeType_Glyph_Renderer *ftgr, Cursor_Renderer *cr, Editor *e, 
+                   Screen *scr)
 {
+    /*  Render Glyphs */
+
+    ftgr_use(ftgr);
+
     glUniform1f(ftgr->time, (float) SDL_GetTicks() / 1000.0f);
     glUniform2f(ftgr->camera, scr->camera.pos.x, -scr->camera.pos.y);
 
@@ -265,7 +269,20 @@ void renderer_draw(FreeType_Glyph_Renderer *ftgr, Editor *e, Screen *scr)
     ftgr_sync(ftgr);
     ftgr_draw(ftgr);
 
+    /*  Render Cursor */
+
+    cr_use(cr);
+
+    glUniform1f(cr->time, (float) SDL_GetTicks() / 1000.0f);
+    glUniform2f(cr->camera, scr->camera.pos.x, -scr->camera.pos.y);
+    glUniform1f(cr->height, FONT_SIZE);
+    glUniform2f(cr->pos, scr->cursor.x, -scr->cursor.y);
+
+    cr_draw();
 }
+
+static FreeType_Glyph_Renderer ftgr = {0};
+static Cursor_Renderer cr = {0};
 
 #endif  // TILE_GLYPH_RENDERER
 
@@ -292,6 +309,7 @@ int main(int argc, char *argv[])
     renderer_init(&tgr);
 #else
     renderer_init(&ftgr, face);
+    cr = cr_init("shaders/bar_cursor.vert", "shaders/bar_cursor.frag");
 #endif // TILE_GLYPH_RENDERER
 
     char *filename = NULL;
@@ -369,15 +387,6 @@ int main(int argc, char *argv[])
                         } break;
                     }
                 } break;
-
-#ifdef TILE_GLYPH_RENDERER
-                case SDL_MOUSEWHEEL: {
-                    camera_scale *= (event.wheel.y > 0) ? 1.05 : 0.95;
-                    assert(camera_scale > 0);
-                    
-                    glUniform2f(tgr.scale, camera_scale, camera_scale);
-                } break;
-#endif // TILE_GLYPH_RENDERER
             }
         }
 
@@ -389,6 +398,7 @@ int main(int argc, char *argv[])
             glUniform2f(tgr.resolution, (float) w, (float) h);
 #else
             glUniform2f(ftgr.resolution, (float) w, (float) h);
+            glUniform2f(cr.resolution, (float) w, (float) h);
 #endif // TILE_GLYPH_RENDERER
         }
 
@@ -412,7 +422,7 @@ int main(int argc, char *argv[])
 
         renderer_draw(&tgr, &e, scr.camera.pos);
 #else
-        renderer_draw(&ftgr, &e, &scr);
+        renderer_draw(&ftgr, &cr, &e, &scr);
 #endif // TILE_GLYPH_RENDERER
 
         const Uint32 duration = (SDL_GetTicks() - start);

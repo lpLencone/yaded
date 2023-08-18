@@ -117,16 +117,9 @@ void ftgr_sync(FreeType_Glyph_Renderer *ftgr)
                     ftgr->glyph);
 }
 
-size_t ftgr_get_glyph_index(FreeType_Glyph_Renderer *ftgr, const char *s, size_t width_lim)
+void ftgr_draw(FreeType_Glyph_Renderer *ftgr)
 {
-    size_t i;
-    for (i = 0; i <= strlen(s); i++) {
-        float this_width = ftgr_get_string_width_n(ftgr, s, i);
-        if (this_width > width_lim) {
-            return (i > 0) ? i - 1 : 0;
-        }
-    }
-    return i;
+    glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, ftgr->glyph_count);
 }
 
 void ftgr_render_string_n(FreeType_Glyph_Renderer *ftgr, const char *s, size_t n,
@@ -161,11 +154,6 @@ void ftgr_render_string(FreeType_Glyph_Renderer *ftgr, const char *s, Vec2f pos,
     ftgr_render_string_n(ftgr, s, strlen(s), pos, fg_color, bg_color);
 }
 
-void ftgr_draw(FreeType_Glyph_Renderer *ftgr)
-{
-    glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, ftgr->glyph_count);
-}
-
 float ftgr_get_string_width_n(FreeType_Glyph_Renderer *ftgr, const char *s, size_t n)
 {
     float width = 0;
@@ -175,6 +163,26 @@ float ftgr_get_string_width_n(FreeType_Glyph_Renderer *ftgr, const char *s, size
     }
     return width;
 }
+
+size_t ftgr_get_glyph_index(FreeType_Glyph_Renderer *ftgr, const char *s, size_t width_lim)
+{
+    size_t i;
+    for (i = 0; i <= strlen(s); i++) {
+        float this_width = ftgr_get_string_width_n(ftgr, s, i);
+        if (this_width > width_lim) {
+            return (i > 0) ? i - 1 : 0;
+        }
+    }
+    return i;
+}
+
+void ftgr_use(const FreeType_Glyph_Renderer *ftgr)
+{
+    glBindVertexArray(ftgr->vao);
+    glBindBuffer(GL_ARRAY_BUFFER, ftgr->vbo);
+    glUseProgram(ftgr->program);
+}
+
 
 static void glyph_push(FreeType_Glyph_Renderer *ftgr, FreeType_Glyph glyph)
 {
@@ -195,16 +203,15 @@ static void init_shaders(FreeType_Glyph_Renderer *ftgr, const char *vert_filenam
         exit(1);
     };
 
-    GLuint program = 0;
-    if (!link_program(vert_shader, frag_shader, &program)) {
+    if (!link_program(vert_shader, frag_shader, &ftgr->program)) {
         exit(1);
     }
 
-    glUseProgram(program);
+    glUseProgram(ftgr->program);
 
-    ftgr->time = glGetUniformLocation(program, "time");
-    ftgr->resolution = glGetUniformLocation(program, "resolution");
-    ftgr->camera = glGetUniformLocation(program, "camera");
+    ftgr->time = glGetUniformLocation(ftgr->program, "time");
+    ftgr->resolution = glGetUniformLocation(ftgr->program, "resolution");
+    ftgr->camera = glGetUniformLocation(ftgr->program, "camera");
 }
 
 static void init_glyph_texture_atlas(FreeType_Glyph_Renderer *ftgr, FT_Face face)

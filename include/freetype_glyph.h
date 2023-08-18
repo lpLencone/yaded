@@ -38,6 +38,8 @@ typedef struct {
     FT_UInt atlas_w;
     FT_UInt atlas_h;
 
+    GLuint program;
+
     GLuint glyph_texture;
     GLuint vao;
     GLuint vbo;
@@ -59,6 +61,8 @@ void ftgr_init(FreeType_Glyph_Renderer *ftgr, FT_Face face,
 
 void ftgr_clear(FreeType_Glyph_Renderer *ftgr);
 void ftgr_sync(FreeType_Glyph_Renderer *ftgr);
+void ftgr_draw(FreeType_Glyph_Renderer *ftgr);
+
 void ftgr_render_string_n(FreeType_Glyph_Renderer *ftgr, const char *s, size_t n,
                           Vec2f pos, Vec4f fg_color, Vec4f bg_color);
 void ftgr_render_string(FreeType_Glyph_Renderer *ftgr, const char *s, Vec2f pos, 
@@ -67,8 +71,6 @@ void ftgr_render_string(FreeType_Glyph_Renderer *ftgr, const char *s, Vec2f pos,
 float ftgr_get_string_width_n(FreeType_Glyph_Renderer *ftgr, const char *s, size_t n); 
 size_t ftgr_get_glyph_index(FreeType_Glyph_Renderer *ftgr, const char *s, size_t width_lim);
 
-
-void ftgr_draw(FreeType_Glyph_Renderer *ftgr);
-
+void ftgr_use(const FreeType_Glyph_Renderer *ftgr);
 
 #endif // YADED_FREETYPEGLYPH_H_
