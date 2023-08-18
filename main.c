@@ -335,16 +335,16 @@ int main(int argc, char *argv[])
 
                 case SDL_KEYDOWN: {
                     switch (event.key.keysym.sym) {
-                        case SDLK_BACKSPACE: 
-                        case SDLK_DELETE: 
-                        case SDLK_RETURN: 
-                        case SDLK_TAB: 
+                        case SDLK_BACKSPACE:
+                        case SDLK_DELETE:
+                        case SDLK_RETURN:
+                        case SDLK_TAB:
                         case SDLK_F3:
                         case SDLK_LEFT:
-                        case SDLK_RIGHT: 
+                        case SDLK_RIGHT:
                         case SDLK_UP:
                         case SDLK_DOWN:
-                        case SDLK_HOME: 
+                        case SDLK_HOME:
                         case SDLK_END:
                         case SDLK_PAGEUP:
                         case SDLK_PAGEDOWN: {
@@ -377,7 +377,8 @@ int main(int argc, char *argv[])
                             cursor_coord.y += FONT_SIZE;
                             int truey = (int) floorf(cursor_coord.y / FONT_SIZE);
                             const char *s = editor_get_line_at(&e, truey);
-                            int truex = (s == NULL) ? 0 : (int) ftgr_get_glyph_index(&ftgr, s, cursor_coord.x);
+                            int truex = (s == NULL) ? 
+                                0 : (int) ftgr_get_glyph_index(&ftgr, s, cursor_coord.x);
               
 #endif // TILE_GLYPH_RENDERER
                             if (truex < 0) truex = 0;
