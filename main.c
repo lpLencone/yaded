@@ -16,13 +16,15 @@
 // #define TILE_GLYPH_RENDERER
 
 #ifdef TILE_GLYPH_RENDERER
-#include "tile_glyph.h"
+#   include "tile_glyph.h"
 #else 
-#include "freetype_glyph.h"
-#include "cursor_renderer.h"
-#define FONT_SIZE           32
-// #define FONT_FILENAME       "./fonts/VictorMono-Regular.ttf"
-#define FONT_FILENAME       "./fonts/TSCu_Comic.ttf"
+#   include "freetype_glyph.h"
+#   include "cursor_renderer.h"
+#   define FONT_SIZE                32
+
+#   define FONT_FILENAME            "fonts/TSCu_Comic.ttf"
+#   define CURSOR_VERT_FILENAME     "shaders/cursor_bar.vert"
+#   define CURSOR_FRAG_FILENAME     "shaders/cursor_bar_blink.frag"
 #endif
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -47,7 +49,11 @@ typedef struct {
         Vec2f pos;
         Vec2f vel;
     } camera;
-    Vec2f cursor;
+    struct {
+        Vec2f actual_pos;
+        Vec2f render_pos;
+        Vec2f vel;
+    } cursor;
 } Screen;
 
 // SDL check codes
@@ -229,22 +235,6 @@ void renderer_init(FreeType_Glyph_Renderer *ftgr, FT_Face face)
     glUniform2f(ftgr->resolution, SCREEN_WIDTH, SCREEN_HEIGHT);
 }
 
-void gl_render_cursor(FreeType_Glyph_Renderer *ftgr, Editor *e, Screen *scr)
-{
-    const Line *line = list_get(&e->lines, e->cy);
-    Vec2f cursor_pos = scr->cursor;
-
-    const char *p;
-    if (e->cx < line->size) {
-        p = &line->s[e->cx];
-    } else {
-        p = " ";
-    }
-
-    cursor_pos.y = -cursor_pos.y;
-    ftgr_render_string_n(ftgr, p, 1, cursor_pos, vec4fs(0.0f), vec4fs(1.0f));
-}
-
 void renderer_draw(FreeType_Glyph_Renderer *ftgr, Cursor_Renderer *cr, Editor *e, 
                    Screen *scr)
 {
@@ -264,7 +254,6 @@ void renderer_draw(FreeType_Glyph_Renderer *ftgr, Cursor_Renderer *cr, Editor *e
         const char *s = editor_get_line_at(e, cy);
         ftgr_render_string(ftgr, s, pos, vec4fs(1.0f), vec4fs(0.0f));
     }
-    gl_render_cursor(ftgr, e, scr);
 
     ftgr_sync(ftgr);
     ftgr_draw(ftgr);
@@ -276,7 +265,7 @@ void renderer_draw(FreeType_Glyph_Renderer *ftgr, Cursor_Renderer *cr, Editor *e
     glUniform1f(cr->time, (float) SDL_GetTicks() / 1000.0f);
     glUniform2f(cr->camera, scr->camera.pos.x, -scr->camera.pos.y);
     glUniform1f(cr->height, FONT_SIZE);
-    glUniform2f(cr->pos, scr->cursor.x, -scr->cursor.y);
+    glUniform2f(cr->pos, scr->cursor.render_pos.x, -scr->cursor.render_pos.y);
 
     cr_draw();
 }
@@ -290,7 +279,6 @@ int main(int argc, char *argv[])
 {
 #ifndef TILE_GLYPH_RENDERER
     FT_Face face = FT_init();
-#else
 #endif // TILE_GLYPH_RENDERER
 
     scc(SDL_Init(SDL_INIT_VIDEO));
@@ -309,7 +297,7 @@ int main(int argc, char *argv[])
     renderer_init(&tgr);
 #else
     renderer_init(&ftgr, face);
-    cr = cr_init("shaders/bar_cursor.vert", "shaders/bar_cursor.frag");
+    cr = cr_init(CURSOR_VERT_FILENAME, CURSOR_FRAG_FILENAME);
 #endif // TILE_GLYPH_RENDERER
 
     char *filename = NULL;
@@ -405,14 +393,29 @@ int main(int argc, char *argv[])
 
 #ifndef TILE_GLYPH_RENDERER
         if (e.cx != last_ecx) {
-            scr.cursor.x = ftgr_get_string_width_n(&ftgr, editor_get_line(&e), e.cx);
+            scr.cursor.actual_pos.x = ftgr_get_string_width_n(&ftgr, editor_get_line(&e), e.cx);
             last_ecx = e.cx;
         }
-        scr.cursor.y = e.cy * FONT_SIZE;
+        scr.cursor.actual_pos.y = e.cy * FONT_SIZE;
+
+        scr.cursor.vel = vec2f_mul(
+            vec2f_sub(scr.cursor.render_pos, scr.cursor.actual_pos),
+            vec2fs(2.0f)
+        );
+        scr.cursor.render_pos = vec2f_add(
+            scr.cursor.render_pos,
+            vec2f_mul(scr.cursor.vel, vec2fs(DELTA_TIME))
+        );
 #endif // TILE_GLYPH_RENDERER
 
-        scr.camera.vel = vec2f_mul(vec2f_sub(scr.cursor, scr.camera.pos), vec2fs(2.0f));
-        scr.camera.pos = vec2f_add(scr.camera.pos, vec2f_mul(scr.camera.vel, vec2fs(DELTA_TIME)));
+        scr.camera.vel = vec2f_mul(
+            vec2f_sub(scr.cursor.render_pos, scr.camera.pos), 
+            vec2fs(2.0f)
+        );
+        scr.camera.pos = vec2f_add(
+            scr.camera.pos, 
+            vec2f_mul(scr.camera.vel, vec2fs(DELTA_TIME))
+        );
 
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
