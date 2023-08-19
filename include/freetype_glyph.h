@@ -11,6 +11,11 @@
 #define FREETYPE_GLYPH_BUFFER_CAPACITY (1024 * 1024)
 #endif // FREETYPE_GLYPH_BUFFER_CAPACITY
 
+#ifndef debug_print
+#include <stdio.h>
+#define debug_print printf("%20s : %4d : %-20s\n", __FILE__, __LINE__, __func__);
+#endif
+
 typedef struct {
     Vec2f pos;
     Vec2f size;
@@ -68,8 +73,14 @@ void ftgr_render_string_n(FreeType_Glyph_Renderer *ftgr, const char *s, size_t n
 void ftgr_render_string(FreeType_Glyph_Renderer *ftgr, const char *s, Vec2f pos, 
                         Vec4f fg_color, Vec4f bg_color);
 
-float ftgr_get_string_width_n(FreeType_Glyph_Renderer *ftgr, const char *s, size_t n); 
-size_t ftgr_get_glyph_index(FreeType_Glyph_Renderer *ftgr, const char *s, size_t width_lim);
+float ftgr_get_s_width_n(FreeType_Glyph_Renderer *ftgr, const char *s, size_t n);
+float ftgr_get_s_width_n_pad(FreeType_Glyph_Renderer *ftgr, const char *s, size_t n,
+                             char pad); 
+size_t ftgr_get_glyph_index_near(FreeType_Glyph_Renderer *ftgr, const char *s, 
+                                 float width);
+size_t ftgr_get_glyph_index_near_pad(FreeType_Glyph_Renderer *ftgr, const char *s,
+                                     float width, char pad);
+
 
 void ftgr_use(const FreeType_Glyph_Renderer *ftgr);
 

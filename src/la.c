@@ -1,5 +1,7 @@
 #include "la.h"
 
+#include <math.h>
+
 /* 2-DIMENSIONAL INT VECTOR */
 
 Vec2i vec2i(int x, int y)
@@ -77,6 +79,16 @@ Vec2f vec2f_mul3(Vec2f a, Vec2f b, Vec2f c)
 Vec2f vec2f_div(Vec2f a, Vec2f b)
 {
     return vec2f(a.x / b.x, a.y / b.y);
+}
+
+bool vec2f_eq(Vec2f a, Vec2f b)
+{
+    return (a.x == b.x && a.y == b.y);
+}
+
+bool vec2f_eq_approx(Vec2f a, Vec2f b)
+{
+    return (round(a.x) == round(b.x) && round(a.y) == round(b.y));
 }
 
 /* 4-DIMENSIONAL FLOAT VECTOR */

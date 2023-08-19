@@ -154,7 +154,7 @@ void ftgr_render_string(FreeType_Glyph_Renderer *ftgr, const char *s, Vec2f pos,
     ftgr_render_string_n(ftgr, s, strlen(s), pos, fg_color, bg_color);
 }
 
-float ftgr_get_string_width_n(FreeType_Glyph_Renderer *ftgr, const char *s, size_t n)
+float ftgr_get_s_width_n(FreeType_Glyph_Renderer *ftgr, const char *s, size_t n)
 {
     float width = 0;
     for (size_t i = 0; i < n; i++) {
@@ -164,16 +164,57 @@ float ftgr_get_string_width_n(FreeType_Glyph_Renderer *ftgr, const char *s, size
     return width;
 }
 
-size_t ftgr_get_glyph_index(FreeType_Glyph_Renderer *ftgr, const char *s, size_t width_lim)
+float ftgr_get_s_width_n_pad(FreeType_Glyph_Renderer *ftgr, const char *s, size_t n, char pad)
+{
+    size_t i = 0;
+    size_t slen = 0;
+    float width = ftgr_get_s_width_n(ftgr, s, slen);
+
+    printf("%ld\n", n);
+
+    float ax = ftgr->gi[(int) pad].ax;
+    while (i++ < n) {
+        width += ax;
+    }
+
+    return width;
+}
+
+size_t ftgr_get_glyph_index_near(FreeType_Glyph_Renderer *ftgr, const char *s, float width)
 {
     size_t i;
-    for (i = 0; i <= strlen(s); i++) {
-        float this_width = ftgr_get_string_width_n(ftgr, s, i);
-        if (this_width > width_lim) {
-            return (i > 0) ? i - 1 : 0;
+    float last_width = 0;
+
+    for (i = 0; i < strlen(s); i++) {
+        float this_width = ftgr_get_s_width_n(ftgr, s, i);
+        if (this_width >= width) {
+            return (i > 0) 
+                ? (this_width - width < width - last_width) ? i : i - 1
+                : 0;
         }
+        last_width = this_width;
     }
     return i;
+}
+
+size_t ftgr_get_glyph_index_near_pad(FreeType_Glyph_Renderer *ftgr, const char *s,
+                                     float width, char pad)
+{
+    size_t i;
+
+    size_t slen = strlen(s);
+    float current_width = 0;
+
+    float ax = ftgr->gi[(int) pad].ax;
+
+    for (i = 0; current_width < width; i++) {
+        if (i <= slen) {
+            current_width = ftgr_get_s_width_n(ftgr, s, i);
+        } else {
+            current_width += ax;
+        }
+    }
+    return (i > 0) ? i - 1 : i;
 }
 
 void ftgr_use(const FreeType_Glyph_Renderer *ftgr)
@@ -182,7 +223,6 @@ void ftgr_use(const FreeType_Glyph_Renderer *ftgr)
     glBindBuffer(GL_ARRAY_BUFFER, ftgr->vbo);
     glUseProgram(ftgr->program);
 }
-
 
 static void glyph_push(FreeType_Glyph_Renderer *ftgr, FreeType_Glyph glyph)
 {

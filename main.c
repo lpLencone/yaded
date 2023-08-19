@@ -1,3 +1,5 @@
+#include <math.h>
+
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,14 +19,24 @@
 
 #ifdef TILE_GLYPH_RENDERER
 #   include "tile_glyph.h"
+#   define FONT_WIDTH          128.0f
+#   define FONT_HEIGHT         64.0f
+#   define FONT_COLS           18.0f
+#   define FONT_ROWS           7.0f
+#   define FONT_CHAR_WIDTH     (FONT_WIDTH  / FONT_COLS)
+#   define FONT_CHAR_HEIGHT    (FONT_HEIGHT / FONT_ROWS)
+#   define FONT_SCALE          3.0f
 #else 
 #   include "freetype_glyph.h"
 #   include "cursor_renderer.h"
-#   define FONT_SIZE                32
+#   define FONT_SIZE                24
 
-#   define FONT_FILENAME            "fonts/TSCu_Comic.ttf"
+#   define FONT_FILENAME            "fonts/VictorMono-Regular.ttf"
 #   define CURSOR_VERT_FILENAME     "shaders/cursor_bar.vert"
-#   define CURSOR_FRAG_FILENAME     "shaders/cursor_bar_blink.frag"
+#   define CURSOR_FRAG_FILENAME     "shaders/cursor_bar_smooth_blinking.frag"
+// #   define CURSOR_FRAG_FILENAME     "shaders/cursor_bar.frag"
+#   define CURSOR_VELOCITY          20.0f
+#   define LINE_SEPARATION_HEIGHT   5 // pixels ig
 #endif
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -36,24 +48,19 @@
 #define DELTA_TIME          (1.0f / FPS)
 #define DELTA_TIME_MS       (1000 / FPS)
 
-#define FONT_WIDTH          128.0f
-#define FONT_HEIGHT         64.0f
-#define FONT_COLS           18.0f
-#define FONT_ROWS           7.0f
-#define FONT_CHAR_WIDTH     (FONT_WIDTH  / FONT_COLS)
-#define FONT_CHAR_HEIGHT    (FONT_HEIGHT / FONT_ROWS)
-#define FONT_SCALE          3.0f
 
 typedef struct {
     struct {
         Vec2f pos;
         Vec2f vel;
-    } camera;
+    } cam;
     struct {
         Vec2f actual_pos;
         Vec2f render_pos;
         Vec2f vel;
-    } cursor;
+        size_t last_cx;
+        size_t last_cy;
+    } cur;
 } Screen;
 
 // SDL check codes
@@ -129,7 +136,6 @@ void init_glew(void)
     } else {
         fprintf(stderr, "WARNING! GLEW_ARB_debug_output is not available\n");
     }
-
 }
 
 const int keymap[] = {
@@ -189,7 +195,7 @@ void gl_render_cursor(Tile_Glyph_Renderer *tgr, Editor *e)
 void renderer_draw(Tile_Glyph_Renderer *tgr, Editor *e, Vec2f camera_pos)
 {
     glUniform1f(tgr->time, (float) SDL_GetTicks() / 1000.0f);
-    glUniform2f(tgr->camera, camera_pos.x, -camera_pos.y);
+    glUniform2f(tgr->cam, camera_pos.x, -camera_pos.y);
 
     tgr_clear(tgr);
     for (int cy = 0; cy < (int) e->lines.length; cy++) {
@@ -243,14 +249,14 @@ void renderer_draw(FreeType_Glyph_Renderer *ftgr, Cursor_Renderer *cr, Editor *e
     ftgr_use(ftgr);
 
     glUniform1f(ftgr->time, (float) SDL_GetTicks() / 1000.0f);
-    glUniform2f(ftgr->camera, scr->camera.pos.x, -scr->camera.pos.y);
+    glUniform2f(ftgr->camera, scr->cam.pos.x, -scr->cam.pos.y);
 
     ftgr_clear(ftgr);
     
     Vec2f pos = {0};
     for (size_t cy = 0; cy < e->lines.length; cy++) {
         pos.x = 0.0f;
-        pos.y = - (float) cy * FONT_SIZE;
+        pos.y = - (float) cy * (FONT_SIZE);
         const char *s = editor_get_line_at(e, cy);
         ftgr_render_string(ftgr, s, pos, vec4fs(1.0f), vec4fs(0.0f));
     }
@@ -262,12 +268,20 @@ void renderer_draw(FreeType_Glyph_Renderer *ftgr, Cursor_Renderer *cr, Editor *e
 
     cr_use(cr);
 
-    glUniform1f(cr->time, (float) SDL_GetTicks() / 1000.0f);
-    glUniform2f(cr->camera, scr->camera.pos.x, -scr->camera.pos.y);
-    glUniform1f(cr->height, FONT_SIZE);
-    glUniform2f(cr->pos, scr->cursor.render_pos.x, -scr->cursor.render_pos.y);
+    glUniform1f(cr->time, ((float) SDL_GetTicks() / 1000.0f));
+    glUniform2f(cr->camera, scr->cam.pos.x, -scr->cam.pos.y);
+    glUniform2f(cr->pos, scr->cur.render_pos.x, -scr->cur.render_pos.y);
 
     cr_draw();
+}
+
+void cursor_move(Screen *scr, Cursor_Renderer *cr, size_t cx, size_t cy)
+{
+    scr->cur.last_cx = cx;
+    scr->cur.last_cy = cy;
+
+    cr_use(cr);
+    glUniform1f(cr->last_moved, ((float) SDL_GetTicks() / 1000.0f));
 }
 
 static FreeType_Glyph_Renderer ftgr = {0};
@@ -298,6 +312,7 @@ int main(int argc, char *argv[])
 #else
     renderer_init(&ftgr, face);
     cr = cr_init(CURSOR_VERT_FILENAME, CURSOR_FRAG_FILENAME);
+    glUniform1f(cr.height, FONT_SIZE);
 #endif // TILE_GLYPH_RENDERER
 
     char *filename = NULL;
@@ -307,8 +322,6 @@ int main(int argc, char *argv[])
 
     Editor e = editor_init(filename);
     Screen scr = {0};
-
-    size_t last_ecx = 0;
 
     bool quit = false;
     while (!quit) {
@@ -354,25 +367,29 @@ int main(int argc, char *argv[])
                             SDL_GetWindowSize(window, &w, &h);
                             Vec2f cursor_coord = vec2f_add(
                                 mouse_coord, 
-                                vec2f_sub(scr.camera.pos, vec2f(w / 2.0f, h / 2.0f))
+                                vec2f_sub(scr.cam.pos, vec2f(w / 2.0f, h / 2.0f))
                             );
-
 
 #ifdef TILE_GLYPH_RENDERER
                             int truex = (int) floorf(cursor_coord.x / (FONT_CHAR_WIDTH * camera_scale)); 
                             int truey = (int) floorf(cursor_coord.y / (FONT_CHAR_HEIGHT * camera_scale)) + 1;
+                            if (truex < 0) truex = 0;
+                            if (truey < 0) truey = 0;
+                            editor_click(&e, truex, truey);
 #else
                             cursor_coord.y += FONT_SIZE;
                             int truey = (int) floorf(cursor_coord.y / FONT_SIZE);
-                            const char *s = editor_get_line_at(&e, truey);
-                            int truex = (s == NULL) ? 
-                                0 : (int) ftgr_get_glyph_index(&ftgr, s, cursor_coord.x);
-              
-#endif // TILE_GLYPH_RENDERER
-                            if (truex < 0) truex = 0;
                             if (truey < 0) truey = 0;
+                            if ((size_t) truey >= e.lines.length) truey = e.lines.length - 1;
+
+
+                            if (cursor_coord.x < 0) cursor_coord.x = 0;
+                            const char *s = editor_get_line_at(&e, truey);
+                            size_t truex = (int) ftgr_get_glyph_index_near(&ftgr, s, cursor_coord.x);
 
                             editor_click(&e, truex, truey);
+                            cursor_move(&scr, &cr, e.cx, e.cy);
+#endif // TILE_GLYPH_RENDERER
                         } break;
                     }
                 } break;
@@ -386,45 +403,61 @@ int main(int argc, char *argv[])
 #ifdef TILE_GLYPH_RENDERER
             glUniform2f(tgr.resolution, (float) w, (float) h);
 #else
+            ftgr_use(&ftgr);
             glUniform2f(ftgr.resolution, (float) w, (float) h);
+
+            cr_use(&cr);
             glUniform2f(cr.resolution, (float) w, (float) h);
 #endif // TILE_GLYPH_RENDERER
         }
 
 #ifndef TILE_GLYPH_RENDERER
-        if (e.cx != last_ecx) {
-            scr.cursor.actual_pos.x = ftgr_get_string_width_n(&ftgr, editor_get_line(&e), e.cx);
-            last_ecx = e.cx;
+        
+        // Update Cursor
+        if (e.cy != scr.cur.last_cy) {
+            const char *s = editor_get_line_at(&e, scr.cur.last_cy);
+            const float last_width = ftgr_get_s_width_n(&ftgr, s, e.cx);
+            e.cx = ftgr_get_glyph_index_near(&ftgr, editor_get_line(&e), last_width);
+            cursor_move(&scr, &cr, e.cx, e.cy);
         }
-        scr.cursor.actual_pos.y = e.cy * FONT_SIZE;
+        if (e.cx != scr.cur.last_cx) {
+            cursor_move(&scr, &cr, e.cx, e.cy);
+        }
 
-        scr.cursor.vel = vec2f_mul(
-            vec2f_sub(scr.cursor.render_pos, scr.cursor.actual_pos),
-            vec2fs(2.0f)
+        // Update cursor position on the screen
+        scr.cur.actual_pos.y = e.cy * FONT_SIZE;
+        scr.cur.actual_pos.x = ftgr_get_s_width_n(&ftgr, editor_get_line(&e), e.cx);
+
+        scr.cur.vel = vec2f_mul(
+            vec2f_sub(scr.cur.render_pos, scr.cur.actual_pos),
+            vec2fs(CURSOR_VELOCITY)
         );
-        scr.cursor.render_pos = vec2f_sub(
-            scr.cursor.render_pos,
-            vec2f_mul(scr.cursor.vel, vec2fs(DELTA_TIME))
+        scr.cur.render_pos = vec2f_sub(
+            scr.cur.render_pos,
+            vec2f_mul(scr.cur.vel, vec2fs(DELTA_TIME))
         );
+
 #endif // TILE_GLYPH_RENDERER
 
-        scr.camera.vel = vec2f_mul(
-            vec2f_sub(scr.cursor.render_pos, scr.camera.pos), 
+        // Update camera position on the screen
+        scr.cam.vel = vec2f_mul(
+            vec2f_sub(scr.cur.render_pos, scr.cam.pos), 
             vec2fs(2.0f)
         );
-        scr.camera.pos = vec2f_add(
-            scr.camera.pos, 
-            vec2f_mul(scr.camera.vel, vec2fs(DELTA_TIME))
+        scr.cam.pos = vec2f_add(
+            scr.cam.pos, 
+            vec2f_mul(scr.cam.vel, vec2fs(DELTA_TIME))
         );
 
+        // Draw
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
 #ifdef TILE_GLYPH_RENDERER
-        scr.cursor = vec2f(e.cx * FONT_CHAR_WIDTH * camera_scale,
+        scr.cur = vec2f(e.cx * FONT_CHAR_WIDTH * camera_scale,
                            e.cy * FONT_CHAR_HEIGHT * camera_scale);
 
-        renderer_draw(&tgr, &e, scr.camera.pos);
+        renderer_draw(&tgr, &e, scr.cam.pos);
 #else
         renderer_draw(&ftgr, &cr, &e, &scr);
 #endif // TILE_GLYPH_RENDERER

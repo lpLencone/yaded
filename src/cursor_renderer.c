@@ -4,11 +4,14 @@
 
 static void init_shaders(Cursor_Renderer *cursor, const char *vert_filename, 
                          const char *frag_filename);
+static void get_uniforms(Cursor_Renderer *cursor);
 
 Cursor_Renderer cr_init(const char *vert_filename, const char *frag_filename)
 {
     Cursor_Renderer cursor;
     init_shaders(&cursor, vert_filename, frag_filename);
+    cr_use(&cursor);
+    get_uniforms(&cursor);
     return cursor;
 }
 
@@ -43,12 +46,14 @@ static void init_shaders(Cursor_Renderer *cursor, const char *vert_filename,
     if (!link_program(vert_shader, frag_shader, &cursor->program)) {
         exit(1);
     }
+}
 
-    glUseProgram(cursor->program);
-
+static void get_uniforms(Cursor_Renderer *cursor)
+{
+    cursor->time = glGetUniformLocation(cursor->program, "time");
+    cursor->last_moved = glGetUniformLocation(cursor->program, "last_moved");
     cursor->resolution = glGetUniformLocation(cursor->program, "resolution");
     cursor->camera = glGetUniformLocation(cursor->program, "camera");
     cursor->pos = glGetUniformLocation(cursor->program, "pos");
     cursor->height = glGetUniformLocation(cursor->program, "height");
-    cursor->time = glGetUniformLocation(cursor->program, "time");
 }

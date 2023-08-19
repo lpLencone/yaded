@@ -79,9 +79,9 @@ void editor_process_key(Editor *e, EditorKeys key)
 
 void editor_click(Editor *e, size_t x, size_t y)
 {
+    e->cx = x;
     if (y < e->lines.length) {
         e->cy = y;
-        e->cx = x;
     }
 }
 

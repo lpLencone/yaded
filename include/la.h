@@ -1,6 +1,8 @@
 #ifndef YADED_LA_H_
 #define YADED_LA_H_
 
+#include <stdbool.h>
+
 typedef struct {
     int x, y;
 } Vec2i;
@@ -24,6 +26,8 @@ Vec2f vec2f_sub(Vec2f a, Vec2f b);
 Vec2f vec2f_mul(Vec2f a, Vec2f b);
 Vec2f vec2f_mul3(Vec2f a, Vec2f b, Vec2f c);
 Vec2f vec2f_div(Vec2f a, Vec2f b);
+bool vec2f_eq(Vec2f a, Vec2f b);
+bool vec2f_eq_approx(Vec2f a, Vec2f b);
 
 typedef struct {
     float x, y, z, w;
