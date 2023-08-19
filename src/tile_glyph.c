@@ -92,13 +92,20 @@ void tgr_init(Tile_Glyph_Renderer *tgr, const char *atlas_filename,
 
     GLuint program = 0;
 
-    GLshader gl_shaders[2] = {
+    GLshader gl_shaders[4] = {
         [0].filename = vert_filename,
         [0].shader_type = GL_VERTEX_SHADER,
+
         [1].filename = frag_filename,
         [1].shader_type = GL_FRAGMENT_SHADER,
+
+        [2].filename = "shaders/common.vert",
+        [2].shader_type = GL_VERTEX_SHADER,
+
+        [3].filename = "shaders/common.frag",
+        [3].shader_type = GL_FRAGMENT_SHADER,
     };
-    compile_shaders(&program, gl_shaders, 2);
+    compile_shaders(&program, gl_shaders, sizeof(gl_shaders) / sizeof(gl_shaders[0]));
 
     glUseProgram(program);
     tgr->time = glGetUniformLocation(program, "time");

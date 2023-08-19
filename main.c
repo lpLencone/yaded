@@ -25,7 +25,6 @@
 #   define FONT_ROWS           7.0f
 #   define FONT_CHAR_WIDTH     (FONT_WIDTH  / FONT_COLS)
 #   define FONT_CHAR_HEIGHT    (FONT_HEIGHT / FONT_ROWS)
-#   define FONT_SCALE          3.0f
 #else 
 #   include "freetype_glyph.h"
 #   include "cursor_renderer.h"
@@ -35,6 +34,7 @@
 #   define CURSOR_VERT_FILENAME     "shaders/cursor_bar.vert"
 #   define CURSOR_FRAG_FILENAME     "shaders/cursor_bar_smooth_blinking.frag"
 // #   define CURSOR_FRAG_FILENAME     "shaders/cursor_bar.frag"
+#   define CURSOR_WIDTH             2.0f
 #   define CURSOR_VELOCITY          20.0f
 #   define LINE_SEPARATION_HEIGHT   5 // pixels ig
 #endif
@@ -47,12 +47,14 @@
 #define FPS                 60
 #define DELTA_TIME          (1.0f / FPS)
 #define DELTA_TIME_MS       (1000 / FPS)
+#define SCALE               1.0f
 
 
 typedef struct {
     struct {
         Vec2f pos;
         Vec2f vel;
+        float scale;
     } cam;
     struct {
         Vec2f actual_pos;
@@ -173,7 +175,7 @@ void renderer_init(Tile_Glyph_Renderer *tgr)
              "shaders/tile_glyph.frag");
 
     glUniform2f(tgr->resolution, SCREEN_WIDTH, SCREEN_HEIGHT);
-    glUniform2f(tgr->scale, FONT_SCALE, FONT_SCALE);
+    glUniform2f(tgr->scale, SCALE, SCALE);
 }
 
 void gl_render_cursor(Tile_Glyph_Renderer *tgr, Editor *e)
@@ -195,7 +197,7 @@ void gl_render_cursor(Tile_Glyph_Renderer *tgr, Editor *e)
 void renderer_draw(Tile_Glyph_Renderer *tgr, Editor *e, Vec2f camera_pos)
 {
     glUniform1f(tgr->time, (float) SDL_GetTicks() / 1000.0f);
-    glUniform2f(tgr->cam, camera_pos.x, -camera_pos.y);
+    glUniform2f(tgr->camera, camera_pos.x, -camera_pos.y);
 
     tgr_clear(tgr);
     for (int cy = 0; cy < (int) e->lines.length; cy++) {
@@ -235,10 +237,16 @@ FT_Face FT_init(void)
 #undef ft_check_error
 }
 
-void renderer_init(FreeType_Glyph_Renderer *ftgr, FT_Face face)
+void renderers_init(Cursor_Renderer *cr, FreeType_Glyph_Renderer *ftgr, FT_Face face)
 {
     ftgr_init(ftgr, face, "shaders/freetype_glyph.vert", "shaders/freetype_glyph.frag");
     glUniform2f(ftgr->resolution, SCREEN_WIDTH, SCREEN_HEIGHT);
+    glUniform2f(ftgr->scale, SCALE, SCALE);
+
+    *cr = cr_init(CURSOR_VERT_FILENAME, CURSOR_FRAG_FILENAME);
+    glUniform1f(cr->height, FONT_SIZE);
+    glUniform1f(cr->width, CURSOR_WIDTH);
+    glUniform2f(cr->scale, SCALE, SCALE);
 }
 
 void renderer_draw(FreeType_Glyph_Renderer *ftgr, Cursor_Renderer *cr, Editor *e, 
@@ -292,10 +300,8 @@ static Cursor_Renderer cr = {0};
 int main(int argc, char *argv[])
 {
 #ifndef TILE_GLYPH_RENDERER
-debug_print
     FT_Face face = FT_init();
 #endif // TILE_GLYPH_RENDERER
-debug_print
 
     scc(SDL_Init(SDL_INIT_VIDEO));
 
@@ -307,17 +313,13 @@ debug_print
     );
     scp(SDL_GL_CreateContext(window));
     init_glew();
-debug_print
 
 #ifdef TILE_GLYPH_RENDERER
-    float camera_scale = FONT_SCALE;
+    float camera_scale = SCALE;
     renderer_init(&tgr);
 #else
-debug_print
-    renderer_init(&ftgr, face);
-    cr = cr_init(CURSOR_VERT_FILENAME, CURSOR_FRAG_FILENAME);
-    glUniform1f(cr.height, FONT_SIZE);
-debug_print
+    renderers_init(&cr, &ftgr, face);
+    
 #endif // TILE_GLYPH_RENDERER
 
     char *filename = NULL;
@@ -327,8 +329,8 @@ debug_print
 
     Editor e = editor_init(filename);
     Screen scr = {0};
+    scr.cam.scale = SCALE;
 
-debug_print
     bool quit = false;
     while (!quit) {
         const Uint32 start = SDL_GetTicks();
@@ -423,8 +425,8 @@ debug_print
         if (e.cy != scr.cur.last_cy) {
             const char *s = editor_get_line_at(&e, scr.cur.last_cy);
             const float last_width = ftgr_get_s_width_n(&ftgr, s, e.cx);
-            e.cx = ftgr_get_glyph_index_near(&ftgr, editor_get_line(&e), last_width);
-            cursor_move(&scr, &cr, e.cx, e.cy);
+            size_t ecx = ftgr_get_glyph_index_near(&ftgr, editor_get_line(&e), last_width);
+            cursor_move(&scr, &cr, ecx, e.cy);
         }
         if (e.cx != scr.cur.last_cx) {
             cursor_move(&scr, &cr, e.cx, e.cy);
@@ -432,7 +434,9 @@ debug_print
 
         // Update cursor position on the screen
         scr.cur.actual_pos.y = e.cy * FONT_SIZE;
-        scr.cur.actual_pos.x = ftgr_get_s_width_n(&ftgr, editor_get_line(&e), e.cx);
+        size_t n = editor_get_line_size(&e);
+        scr.cur.actual_pos.x = 
+            ftgr_get_s_width_n(&ftgr, editor_get_line(&e), (e.cx > n) ? n : e.cx);
 
         scr.cur.vel = vec2f_mul(
             vec2f_sub(scr.cur.render_pos, scr.cur.actual_pos),
@@ -460,8 +464,8 @@ debug_print
         glClear(GL_COLOR_BUFFER_BIT);
 
 #ifdef TILE_GLYPH_RENDERER
-        scr.cur = vec2f(e.cx * FONT_CHAR_WIDTH * camera_scale,
-                           e.cy * FONT_CHAR_HEIGHT * camera_scale);
+        scr.cur.render_pos = vec2f(e.cx * FONT_CHAR_WIDTH * camera_scale,
+                                   e.cy * FONT_CHAR_HEIGHT * camera_scale);
 
         renderer_draw(&tgr, &e, scr.cam.pos);
 #else

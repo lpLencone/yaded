@@ -73,6 +73,7 @@ static bool compile_shader_source(const GLchar *source, GLenum shader_type, GLui
 
     return true;
 }
+
 static bool link_program(GLuint *program, GLuint *shaders, size_t n_shaders)
 {
     *program = glCreateProgram();

@@ -3,7 +3,7 @@
 uniform float   time;
 uniform vec2    resolution;
 uniform vec2    camera;
-uniform vec2    camera_scale;
+uniform vec2    scale;
 
 layout(location = 0) in vec2 pos;
 layout(location = 1) in vec2 size;
@@ -18,14 +18,7 @@ out vec2 glyph_uv_size;
 out vec4 glyph_fg_color;
 out vec4 glyph_bg_color;
 
-float map01(float x) {
-    return (x + 1) / 2;
-}
-
-vec2 camera_project(vec2 point) {
-    float camscale = 1.0 + map01(sin(16.0 * time));
-    return 2.0 * (point - camera) * camscale / resolution;
-}
+vec2 camera_project(vec2 point);
 
 void main() {
     uv = vec2(float(gl_VertexID & 1), float((gl_VertexID >> 1) & 1));

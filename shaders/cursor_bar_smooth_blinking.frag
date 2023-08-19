@@ -5,10 +5,7 @@
 uniform float time;
 uniform float last_moved;
 
-float map01(float x) {
-    // -1.0 .. 1.0 ==> 0.0 .. 1.0
-    return (x + 1) / 2;
-}
+float map01(float x);
 
 void main() {
     float t = time - last_moved;

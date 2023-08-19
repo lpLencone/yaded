@@ -52,6 +52,7 @@ typedef struct {
     GLuint time;
     GLuint resolution;
     GLuint camera;
+    GLuint scale;
 
     FreeType_Glyph glyph[FREETYPE_GLYPH_BUFFER_CAPACITY];
     size_t glyph_count;

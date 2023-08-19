@@ -96,24 +96,32 @@ void ftgr_init(FreeType_Glyph_Renderer *ftgr, FT_Face face,
         }
         glVertexAttribDivisor(attr, 1);
 
-        GLshader gl_shaders[2] = {
-            [0].filename = vert_filename,
-            [0].shader_type = GL_VERTEX_SHADER,
-            [1].filename = frag_filename,
-            [1].shader_type = GL_FRAGMENT_SHADER,
-        };
-        compile_shaders(&ftgr->program, gl_shaders, 2);
     }
+    GLshader gl_shaders[4] = {
+        [0].filename = vert_filename,
+        [0].shader_type = GL_VERTEX_SHADER,
+
+        [1].filename = frag_filename,
+        [1].shader_type = GL_FRAGMENT_SHADER,
+
+        [2].filename = "shaders/common.vert",
+        [2].shader_type = GL_VERTEX_SHADER,
+
+        [3].filename = "shaders/common.frag",
+        [3].shader_type = GL_FRAGMENT_SHADER,
+    };
+    compile_shaders(&ftgr->program, gl_shaders, sizeof(gl_shaders) / sizeof(gl_shaders[0]));
 
     ftgr->atlas_w = 0;
     ftgr->atlas_h = 0;
     init_glyph_texture_atlas(ftgr, face);
 
-    glUseProgram(ftgr->program);
+    ftgr_use(ftgr);
 
     ftgr->time = glGetUniformLocation(ftgr->program, "time");
     ftgr->resolution = glGetUniformLocation(ftgr->program, "resolution");
     ftgr->camera = glGetUniformLocation(ftgr->program, "camera");
+    ftgr->scale = glGetUniformLocation(ftgr->program, "scale");
 }
 
 void ftgr_clear(FreeType_Glyph_Renderer *ftgr)
@@ -179,8 +187,6 @@ float ftgr_get_s_width_n_pad(FreeType_Glyph_Renderer *ftgr, const char *s, size_
     size_t i = 0;
     size_t slen = 0;
     float width = ftgr_get_s_width_n(ftgr, s, slen);
-
-    printf("%ld\n", n);
 
     float ax = ftgr->gi[(int) pad].ax;
     while (i++ < n) {

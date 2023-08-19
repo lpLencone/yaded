@@ -7,12 +7,13 @@
 typedef struct {
     GLuint program;
 
-    GLuint last_moved;
     GLuint time;
-
+    GLuint last_moved;
     GLuint resolution;
     GLuint camera;
+    GLuint scale;
     GLuint height;
+    GLuint width;
     GLuint pos;
 
 } Cursor_Renderer;
