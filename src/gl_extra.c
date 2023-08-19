@@ -8,7 +8,52 @@
 #include <stdlib.h>
 #include <string.h>
 
-bool compile_shader_source(const GLchar *source, GLenum shader_type, GLuint *shader)
+static const char *shader_type_as_cstr(GLuint shader);
+static bool link_program(GLuint *program, GLuint *shaders, size_t n_shaders);
+static bool compile_shader_file(const char *filename, GLenum shader_type, GLuint *shader);
+static bool compile_shader_source(const GLchar *source, GLenum shader_type, GLuint *shader);
+
+bool compile_shaders(GLuint *program, const GLshader *gl_shaders, size_t n_shaders)
+{
+    GLuint *shaders = malloc(sizeof(GLuint) * n_shaders);
+    
+    for (size_t i = 0; i < n_shaders; i++) {
+        if (!compile_shader_file(gl_shaders[i].filename, 
+                                 gl_shaders[i].shader_type, 
+                                 &shaders[i])) 
+        {
+            return false;
+        }
+    }
+
+    if (!link_program(program, shaders, n_shaders)) {
+        return false;
+    }
+
+    free(shaders);
+    return true;
+}
+
+static bool compile_shader_file(const char *filename, GLenum shader_type, GLuint *shader)
+{
+    char *source = slurp_file_into_malloced_cstr(filename);
+    
+    if (source == NULL) {
+        fprintf(stderr, "ERROR: failed to read file `%s`: %s\n", filename, strerror(errno));
+        errno = 0;
+        return false;
+    }
+
+    if (!compile_shader_source(source, shader_type, shader)) {
+        fprintf(stderr, "ERROR: failed to compile `%s` shader file\n", filename);
+        return false;
+    }
+
+    free(source);
+    return true;
+}
+
+static bool compile_shader_source(const GLchar *source, GLenum shader_type, GLuint *shader)
 {
     *shader = glCreateShader(shader_type);
     glShaderSource(*shader, 1, &source, NULL);
@@ -28,29 +73,14 @@ bool compile_shader_source(const GLchar *source, GLenum shader_type, GLuint *sha
 
     return true;
 }
-
-bool compile_shader_file(const char *filename, GLenum shader_type, GLuint *shader)
-{
-    char *source = slurp_file_into_malloced_cstr(filename);
-    if (source == NULL) {
-        fprintf(stderr, "ERROR: failed to read file `%s`: %s\n", filename, strerror(errno));
-        errno = 0;
-        return false;
-    }
-    bool ok = compile_shader_source(source, shader_type, shader);
-    if (!ok) {
-        fprintf(stderr, "ERROR: failed to compile `%s` shader file\n", filename);
-    }
-    free(source);
-    return ok;
-}
-
-bool link_program(GLuint vert_shader, GLuint frag_shader, GLuint *program)
+static bool link_program(GLuint *program, GLuint *shaders, size_t n_shaders)
 {
     *program = glCreateProgram();
 
-    glAttachShader(*program, vert_shader);
-    glAttachShader(*program, frag_shader);
+    for (size_t i = 0; i < n_shaders; i++) {
+        glAttachShader(*program, shaders[i]);
+    }
+
     glLinkProgram(*program);
 
     GLint linked = 0;
@@ -63,13 +93,14 @@ bool link_program(GLuint vert_shader, GLuint frag_shader, GLuint *program)
         fprintf(stderr, "Program Linking: %.*s\n", message_size, message);
     }
 
-    glDeleteShader(vert_shader);
-    glDeleteShader(frag_shader);
+    for (size_t i = 0; i < n_shaders; i++) {
+        glDeleteShader(shaders[i]);
+    }
 
     return program;
 }
 
-const char *shader_type_as_cstr(GLuint shader)
+static const char *shader_type_as_cstr(GLuint shader)
 {
     switch (shader) {
         case GL_VERTEX_SHADER:

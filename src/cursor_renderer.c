@@ -2,17 +2,23 @@
 
 #include <stdlib.h>
 
-static void init_shaders(Cursor_Renderer *cursor, const char *vert_filename, 
-                         const char *frag_filename);
-static void get_uniforms(Cursor_Renderer *cursor);
+static void get_uniforms(Cursor_Renderer *cr);
 
 Cursor_Renderer cr_init(const char *vert_filename, const char *frag_filename)
 {
-    Cursor_Renderer cursor;
-    init_shaders(&cursor, vert_filename, frag_filename);
-    cr_use(&cursor);
-    get_uniforms(&cursor);
-    return cursor;
+    Cursor_Renderer cr;
+    
+    GLshader gl_shaders[2] = {
+        [0].filename = vert_filename,
+        [0].shader_type = GL_VERTEX_SHADER,
+        [1].filename = frag_filename,
+        [1].shader_type = GL_FRAGMENT_SHADER,
+    };
+    compile_shaders(&cr.program, gl_shaders, 2);
+
+    cr_use(&cr);
+    get_uniforms(&cr);
+    return cr;
 }
 
 void cr_move(const Cursor_Renderer *cr, Vec2f pos)
@@ -30,30 +36,12 @@ void cr_use(const Cursor_Renderer *cr)
     glUseProgram(cr->program);
 }
 
-static void init_shaders(Cursor_Renderer *cursor, const char *vert_filename, 
-                         const char *frag_filename)
+static void get_uniforms(Cursor_Renderer *cr)
 {
-    GLuint vert_shader = 0;
-    if (!compile_shader_file(vert_filename, GL_VERTEX_SHADER, &vert_shader)) {
-        exit(1);
-    };
-
-    GLuint frag_shader = 0;
-    if (!compile_shader_file(frag_filename, GL_FRAGMENT_SHADER, &frag_shader)) {
-        exit(1);
-    };
-
-    if (!link_program(vert_shader, frag_shader, &cursor->program)) {
-        exit(1);
-    }
-}
-
-static void get_uniforms(Cursor_Renderer *cursor)
-{
-    cursor->time = glGetUniformLocation(cursor->program, "time");
-    cursor->last_moved = glGetUniformLocation(cursor->program, "last_moved");
-    cursor->resolution = glGetUniformLocation(cursor->program, "resolution");
-    cursor->camera = glGetUniformLocation(cursor->program, "camera");
-    cursor->pos = glGetUniformLocation(cursor->program, "pos");
-    cursor->height = glGetUniformLocation(cursor->program, "height");
+    cr->time = glGetUniformLocation(cr->program, "time");
+    cr->last_moved = glGetUniformLocation(cr->program, "last_moved");
+    cr->resolution = glGetUniformLocation(cr->program, "resolution");
+    cr->camera = glGetUniformLocation(cr->program, "camera");
+    cr->pos = glGetUniformLocation(cr->program, "pos");
+    cr->height = glGetUniformLocation(cr->program, "height");
 }

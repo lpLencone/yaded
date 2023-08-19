@@ -45,8 +45,6 @@ static const Attr_Def glyph_attr_defs[COUNT_TILE_GLYPH_ATTRS] = {
 static_assert(COUNT_TILE_GLYPH_ATTRS == 4, "The amount of glyph vertex attributes has changed");
 
 static void load_texture_atlas(Tile_Glyph_Renderer *tgr, const char *filename);
-static void init_shaders(Tile_Glyph_Renderer *tgr, const char *vert_filename, 
-                         const char *frag_filename);
 
 static void glyph_push(Tile_Glyph_Renderer *tgr, Tile_Glyph glyph);
 
@@ -91,7 +89,22 @@ void tgr_init(Tile_Glyph_Renderer *tgr, const char *atlas_filename,
     }
 
     load_texture_atlas(tgr, atlas_filename);
-    init_shaders(tgr, vert_filename, frag_filename);
+
+    GLuint program = 0;
+
+    GLshader gl_shaders[2] = {
+        [0].filename = vert_filename,
+        [0].shader_type = GL_VERTEX_SHADER,
+        [1].filename = frag_filename,
+        [1].shader_type = GL_FRAGMENT_SHADER,
+    };
+    compile_shaders(&program, gl_shaders, 2);
+
+    glUseProgram(program);
+    tgr->time = glGetUniformLocation(program, "time");
+    tgr->resolution = glGetUniformLocation(program, "resolution");
+    tgr->scale = glGetUniformLocation(program, "scale");
+    tgr->camera = glGetUniformLocation(program, "camera");
 }
 
 void tgr_clear(Tile_Glyph_Renderer *tgr)
@@ -101,10 +114,12 @@ void tgr_clear(Tile_Glyph_Renderer *tgr)
 
 void tgr_sync(Tile_Glyph_Renderer *tgr)
 {
-    glBufferSubData(GL_ARRAY_BUFFER, 
-                    0, 
-                    tgr->glyph_count * sizeof(Tile_Glyph), 
-                    tgr->glyph);
+    glBufferSubData(
+        GL_ARRAY_BUFFER, 
+        0, 
+        tgr->glyph_count * sizeof(Tile_Glyph), 
+        tgr->glyph
+    );
 }
 
 void tgr_render_text(Tile_Glyph_Renderer *tgr, const char *s, Vec2i tile, 
@@ -156,35 +171,6 @@ static void load_texture_atlas(Tile_Glyph_Renderer *tgr, const char *filename)
 
     stbi_image_free(pixels);
 }
-
-
-static void init_shaders(Tile_Glyph_Renderer *tgr, const char *vert_filename, 
-                         const char *frag_filename)
-{
-    GLuint vert_shader = 0;
-    if (!compile_shader_file(vert_filename, GL_VERTEX_SHADER, &vert_shader)) {
-        exit(1);
-    };
-
-    GLuint frag_shader = 0;
-    if (!compile_shader_file(frag_filename, GL_FRAGMENT_SHADER, &frag_shader)) {
-        exit(1);
-    };
-
-    GLuint program = 0;
-    if (!link_program(vert_shader, frag_shader, &program)) {
-        exit(1);
-    }
-
-    glUseProgram(program);
-
-    tgr->time = glGetUniformLocation(program, "time");
-    tgr->resolution = glGetUniformLocation(program, "resolution");
-    tgr->scale = glGetUniformLocation(program, "scale");
-    tgr->camera = glGetUniformLocation(program, "camera");
-}
-
-
 
 
 

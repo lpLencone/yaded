@@ -292,8 +292,10 @@ static Cursor_Renderer cr = {0};
 int main(int argc, char *argv[])
 {
 #ifndef TILE_GLYPH_RENDERER
+debug_print
     FT_Face face = FT_init();
 #endif // TILE_GLYPH_RENDERER
+debug_print
 
     scc(SDL_Init(SDL_INIT_VIDEO));
 
@@ -305,14 +307,17 @@ int main(int argc, char *argv[])
     );
     scp(SDL_GL_CreateContext(window));
     init_glew();
+debug_print
 
 #ifdef TILE_GLYPH_RENDERER
     float camera_scale = FONT_SCALE;
     renderer_init(&tgr);
 #else
+debug_print
     renderer_init(&ftgr, face);
     cr = cr_init(CURSOR_VERT_FILENAME, CURSOR_FRAG_FILENAME);
     glUniform1f(cr.height, FONT_SIZE);
+debug_print
 #endif // TILE_GLYPH_RENDERER
 
     char *filename = NULL;
@@ -323,6 +328,7 @@ int main(int argc, char *argv[])
     Editor e = editor_init(filename);
     Screen scr = {0};
 
+debug_print
     bool quit = false;
     while (!quit) {
         const Uint32 start = SDL_GetTicks();
