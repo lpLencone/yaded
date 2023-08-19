@@ -8,20 +8,21 @@ Cursor_Renderer cr_init(const char *vert_filename, const char *frag_filename)
 {
     Cursor_Renderer cr;
     
-    GLshader gl_shaders[4] = {
-        [0].filename = vert_filename,
-        [0].shader_type = GL_VERTEX_SHADER,
-
-        [1].filename = frag_filename,
-        [1].shader_type = GL_FRAGMENT_SHADER,
-
-        [2].filename = "shaders/common.vert",
-        [2].shader_type = GL_VERTEX_SHADER,
-
-        [3].filename = "shaders/common.frag",
-        [3].shader_type = GL_FRAGMENT_SHADER,
+    const char *shaders_filenames[] = {
+        vert_filename, frag_filename, "shaders/common.vert", "shaders/common.frag",
     };
-    compile_shaders(&cr.program, gl_shaders, sizeof(gl_shaders) / sizeof(gl_shaders[0]));
+    size_t n_shaders = sizeof(shaders_filenames) / sizeof(shaders_filenames[0]);
+
+    GLuint *shaders = malloc(n_shaders * sizeof(GLuint));
+
+    cr.program = glCreateProgram();
+    compile_shaders(shaders_filenames, n_shaders, shaders);
+    attach_shaders(cr.program, shaders, n_shaders);
+    if (!link_program(cr.program)) {
+        fprintf(stderr, "At %s : %d\n", __FILE__, __LINE__);
+    }
+
+    free(shaders);
 
     get_uniforms(&cr);
     return cr;

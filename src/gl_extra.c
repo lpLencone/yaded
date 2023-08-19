@@ -3,34 +3,54 @@
 
 #include <SDL2/SDL_opengl.h>
 
+#include <assert.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 static const char *shader_type_as_cstr(GLuint shader);
-static bool link_program(GLuint *program, GLuint *shaders, size_t n_shaders);
+static GLenum shader_type_from_filename(const char *filename);
 static bool compile_shader_file(const char *filename, GLenum shader_type, GLuint *shader);
 static bool compile_shader_source(const GLchar *source, GLenum shader_type, GLuint *shader);
 
-bool compile_shaders(GLuint *program, const GLshader *gl_shaders, size_t n_shaders)
+bool compile_shaders(const char **shaders_filenames, size_t n_shaders, 
+                     GLuint *shaders)
 {
-    GLuint *shaders = malloc(sizeof(GLuint) * n_shaders);
-    
     for (size_t i = 0; i < n_shaders; i++) {
-        if (!compile_shader_file(gl_shaders[i].filename, 
-                                 gl_shaders[i].shader_type, 
+        if (!compile_shader_file(shaders_filenames[i],
+                                 shader_type_from_filename(shaders_filenames[i]),
                                  &shaders[i])) 
         {
             return false;
         }
     }
 
-    if (!link_program(program, shaders, n_shaders)) {
+    return true;
+}
+
+void attach_shaders(GLuint program, GLuint *shaders, size_t n_shaders)
+{
+    for (size_t i = 0; i < n_shaders; i++) {
+        glAttachShader(program, shaders[i]);
+    }
+}
+
+bool link_program(GLuint program)
+{
+    glLinkProgram(program);
+
+    GLint linked = 0;
+    glGetProgramiv(program, GL_LINK_STATUS, &linked);
+    if (!linked) {
+        GLsizei message_size = 0;
+        GLchar message[1024];
+
+        glGetProgramInfoLog(program, sizeof(message), &message_size, message);
+        fprintf(stderr, "Program Linking: %.*s\n", message_size, message);
         return false;
     }
 
-    free(shaders);
     return true;
 }
 
@@ -74,31 +94,15 @@ static bool compile_shader_source(const GLchar *source, GLenum shader_type, GLui
     return true;
 }
 
-static bool link_program(GLuint *program, GLuint *shaders, size_t n_shaders)
+static GLenum shader_type_from_filename(const char *filename)
 {
-    *program = glCreateProgram();
-
-    for (size_t i = 0; i < n_shaders; i++) {
-        glAttachShader(*program, shaders[i]);
+    switch (filename[strlen(filename) - 1]) {
+        case 't': return GL_VERTEX_SHADER;
+        case 'g': return GL_FRAGMENT_SHADER;
+        default:
+            assert(false && "unreachable");
+            exit(1); // case assert disabled
     }
-
-    glLinkProgram(*program);
-
-    GLint linked = 0;
-    glGetProgramiv(*program, GL_LINK_STATUS, &linked);
-    if (!linked) {
-        GLsizei message_size = 0;
-        GLchar message[1024];
-
-        glGetProgramInfoLog(*program, sizeof(message), &message_size, message);
-        fprintf(stderr, "Program Linking: %.*s\n", message_size, message);
-    }
-
-    for (size_t i = 0; i < n_shaders; i++) {
-        glDeleteShader(shaders[i]);
-    }
-
-    return program;
 }
 
 static const char *shader_type_as_cstr(GLuint shader)
@@ -112,3 +116,4 @@ static const char *shader_type_as_cstr(GLuint shader)
             return "(Unknown)";
     }
 }
+

@@ -56,6 +56,7 @@ static_assert(COUNT_FT_GLYPH_ATTRS == 6, "The amount of glyph vertex attributes 
 
 static void init_glyph_texture_atlas(FreeType_Glyph_Renderer *ftgr, FT_Face face);
 static void glyph_push(FreeType_Glyph_Renderer *ftgr, FreeType_Glyph glyph);
+static void get_uniforms(FreeType_Glyph_Renderer *ftgr);
 
 void ftgr_init(FreeType_Glyph_Renderer *ftgr, FT_Face face,
                const char *vert_filename, const char *frag_filename)
@@ -97,31 +98,28 @@ void ftgr_init(FreeType_Glyph_Renderer *ftgr, FT_Face face,
         glVertexAttribDivisor(attr, 1);
 
     }
-    GLshader gl_shaders[4] = {
-        [0].filename = vert_filename,
-        [0].shader_type = GL_VERTEX_SHADER,
 
-        [1].filename = frag_filename,
-        [1].shader_type = GL_FRAGMENT_SHADER,
-
-        [2].filename = "shaders/common.vert",
-        [2].shader_type = GL_VERTEX_SHADER,
-
-        [3].filename = "shaders/common.frag",
-        [3].shader_type = GL_FRAGMENT_SHADER,
+    const char *shaders_filenames[] = {
+        vert_filename, frag_filename, "shaders/common.vert", "shaders/common.frag",
     };
-    compile_shaders(&ftgr->program, gl_shaders, sizeof(gl_shaders) / sizeof(gl_shaders[0]));
+    size_t n_shaders = sizeof(shaders_filenames) / sizeof(shaders_filenames[0]);
+
+    GLuint *shaders = malloc(n_shaders * sizeof(GLuint));
+    compile_shaders(shaders_filenames, n_shaders, shaders);
+
+    ftgr->program = glCreateProgram();
+    attach_shaders(ftgr->program, shaders, n_shaders);
+    if (!link_program(ftgr->program)) {
+        fprintf(stderr, "At %s : %d\n", __FILE__, __LINE__);
+    }
+
+    free(shaders);
 
     ftgr->atlas_w = 0;
     ftgr->atlas_h = 0;
     init_glyph_texture_atlas(ftgr, face);
 
-    ftgr_use(ftgr);
-
-    ftgr->time = glGetUniformLocation(ftgr->program, "time");
-    ftgr->resolution = glGetUniformLocation(ftgr->program, "resolution");
-    ftgr->camera = glGetUniformLocation(ftgr->program, "camera");
-    ftgr->scale = glGetUniformLocation(ftgr->program, "scale");
+    get_uniforms(ftgr);
 }
 
 void ftgr_clear(FreeType_Glyph_Renderer *ftgr)
@@ -301,5 +299,14 @@ static void init_glyph_texture_atlas(FreeType_Glyph_Renderer *ftgr, FT_Face face
     }
 }
 
+static void get_uniforms(FreeType_Glyph_Renderer *ftgr)
+{
+    ftgr_use(ftgr);
+
+    ftgr->time = glGetUniformLocation(ftgr->program, "time");
+    ftgr->resolution = glGetUniformLocation(ftgr->program, "resolution");
+    ftgr->camera = glGetUniformLocation(ftgr->program, "camera");
+    ftgr->scale = glGetUniformLocation(ftgr->program, "scale");
+}
 
 

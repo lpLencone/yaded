@@ -15,7 +15,7 @@
 #include "editor.h"
 #include "gl_extra.h"
 
-// #define TILE_GLYPH_RENDERER
+#define TILE_GLYPH_RENDERER
 
 #ifdef TILE_GLYPH_RENDERER
 #   include "tile_glyph.h"
@@ -25,10 +25,11 @@
 #   define FONT_ROWS           7.0f
 #   define FONT_CHAR_WIDTH     (FONT_WIDTH  / FONT_COLS)
 #   define FONT_CHAR_HEIGHT    (FONT_HEIGHT / FONT_ROWS)
+#   define SCALE               1.8f
 #else 
 #   include "freetype_glyph.h"
 #   include "cursor_renderer.h"
-#   define FONT_SIZE                24
+#   define FONT_SIZE                128
 
 #   define FONT_FILENAME            "fonts/VictorMono-Regular.ttf"
 #   define CURSOR_VERT_FILENAME     "shaders/cursor_bar.vert"
@@ -37,6 +38,7 @@
 #   define CURSOR_WIDTH             2.0f
 #   define CURSOR_VELOCITY          20.0f
 #   define LINE_SEPARATION_HEIGHT   5 // pixels ig
+#   define SCALE               0.25f
 #endif
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -47,7 +49,6 @@
 #define FPS                 60
 #define DELTA_TIME          (1.0f / FPS)
 #define DELTA_TIME_MS       (1000 / FPS)
-#define SCALE               1.0f
 
 
 typedef struct {
