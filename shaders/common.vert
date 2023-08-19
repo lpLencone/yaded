@@ -12,8 +12,10 @@ uniform vec2    scale;
 vec2 camera_project(vec2 point) 
 {
     vec2 uv = vec2(float(gl_VertexID & 1), float((gl_VertexID >> 1) & 1));
+    float lsd = (1.0 + pow(sin(map01(cos(time)) * uv.x) + cos(map01(sin(time) * uv.y)), 0.2));
 
-    return 2.0 * (point - camera) * scale * (1.0 + map01(sin(time + sin(uv.x) + cos(uv.y)))) / resolution;
+    return 2.0 * (point - camera) * scale * lsd / resolution;
 }
 
-// return 2.0 * (point - camera) * scale * (1.0 + sin(time + sin(uv.x) + cos(uv.y))) / resolution;
+// float lsd = (1.0 + sin(time + sin(uv.x) + cos(uv.y)));
+// float lsd = (1.0 + map01(sin(time + sin(uv.x) + cos(uv.y))));
