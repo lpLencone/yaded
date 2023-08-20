@@ -26,7 +26,7 @@
 #define CURSOR_WIDTH             2.5f
 #define CURSOR_VELOCITY          20.0f
 #define LINE_SEPARATION_HEIGHT   5 // pixels ig
-#define SCALE                    0.25f
+#define SCALE                    0.5f
 
 #define SCREEN_WIDTH        800
 #define SCREEN_HEIGHT       600

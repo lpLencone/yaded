@@ -1,8 +1,8 @@
 #ifndef YADED_CURSORRENDERER_H_
 #define YADED_CURSORRENDERER_H_
 
-#include "gl_extra.h"
 #include "la.h"
+#include "gl_extra.h"
 
 typedef struct {
     GLuint program;

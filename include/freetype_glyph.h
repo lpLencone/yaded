@@ -49,10 +49,10 @@ typedef struct {
     GLuint vao;
     GLuint vbo;
 
-    GLuint time;
-    GLuint resolution;
-    GLuint camera;
-    GLuint scale;
+    GLint time;
+    GLint scale;
+    GLint camera;
+    GLint resolution;
 
     FreeType_Glyph glyph[FREETYPE_GLYPH_BUFFER_CAPACITY];
     size_t glyph_count;
@@ -77,6 +77,7 @@ void ftgr_render_string(FreeType_Glyph_Renderer *ftgr, const char *s, Vec2f pos,
 float ftgr_get_s_width_n(FreeType_Glyph_Renderer *ftgr, const char *s, size_t n);
 float ftgr_get_s_width_n_pad(FreeType_Glyph_Renderer *ftgr, const char *s, size_t n,
                              char pad); 
+
 size_t ftgr_get_glyph_index_near(FreeType_Glyph_Renderer *ftgr, const char *s, 
                                  float width);
 size_t ftgr_get_glyph_index_near_pad(FreeType_Glyph_Renderer *ftgr, const char *s,
