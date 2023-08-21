@@ -8,7 +8,8 @@
 #define editor_debug printf("(%ld, %ld)\n", e->cx, e->cy);
 
 typedef enum {
-    EDITOR_LEFT,
+    EDITOR_MOVE_KEY_START,
+    EDITOR_LEFT = EDITOR_MOVE_KEY_START,
     EDITOR_RIGHT,
     EDITOR_UP,
     EDITOR_DOWN,
@@ -16,12 +17,17 @@ typedef enum {
     EDITOR_END,
     EDITOR_PAGEUP,
     EDITOR_PAGEDOWN,
-    EDITOR_BACKSPACE,
+    EDITOR_MOVE_KEY_END,
+    EDITOR_EDIT_KEY_START = EDITOR_MOVE_KEY_END,
+    EDITOR_BACKSPACE = EDITOR_EDIT_KEY_START,
     EDITOR_DELETE,
     EDITOR_RETURN,
     EDITOR_TAB,
-    EDITOR_SAVE,
-} EditorKeys;
+    EDITOR_EDIT_KEY_END,
+    EDITOR_ACTION_KEY_START = EDITOR_EDIT_KEY_END,
+    EDITOR_SAVE = EDITOR_ACTION_KEY_START,
+    EDITOR_ACTION_KEY_END,
+} EditorKey;
 
 typedef struct {
     List lines;
@@ -33,7 +39,7 @@ typedef struct {
 Editor editor_init(const char *filename);
 void editor_insert_text(Editor *e, const char *s);
 void editor_delete_char(Editor *e);
-void editor_process_key(Editor *e, EditorKeys key);
+void editor_process_key(Editor *e, EditorKey key);
 void editor_click(Editor *e, size_t x, size_t y);
 
 size_t editor_get_line_size(const Editor *e);

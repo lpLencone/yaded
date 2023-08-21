@@ -149,9 +149,23 @@ const int keymap[] = {
 
 const size_t keymap_size = sizeof(keymap) / sizeof(keymap[0]);
 
-EditorKeys find_key(int code) {
-    for (size_t i = 0; i < keymap_size; i++) {
-        if (keymap[i] == code) return i;
+EditorKey find_move_key(int code) {
+    for (EditorKey ek = EDITOR_MOVE_KEY_START; ek < EDITOR_MOVE_KEY_END; ek++) {
+        if (keymap[ek] == code) return ek;
+    }
+    assert(0);
+}
+
+EditorKey find_edit_key(int code) {
+    for (EditorKey ek = EDITOR_EDIT_KEY_START; ek < EDITOR_EDIT_KEY_END; ek++) {
+        if (keymap[ek] == code) return ek;
+    }
+    assert(0);
+}
+
+EditorKey find_action_key(int code) {
+    for (EditorKey ek = EDITOR_ACTION_KEY_START; ek < EDITOR_ACTION_KEY_END; ek++) {
+        if (keymap[ek] == code) return ek;
     }
     assert(0);
 }
@@ -245,13 +259,16 @@ void renderer_draw(FreeType_Glyph_Renderer *ftgr, Cursor_Renderer *cr, Editor *e
     cr_draw();
 }
 
-void cursor_move(Screen *scr, Cursor_Renderer *cr, size_t cx, size_t cy)
+void update_last_stroke(Cursor_Renderer *cr)
+{
+    cr_use(cr);
+    glUniform1f(cr->last_moved, ((float) SDL_GetTicks() / 1000.0f));
+}
+
+void cursor_move(Screen *scr, size_t cx, size_t cy)
 {
     scr->cur.last_cx = cx;
     scr->cur.last_cy = cy;
-
-    cr_use(cr);
-    glUniform1f(cr->last_moved, ((float) SDL_GetTicks() / 1000.0f));
 }
 
 static FreeType_Glyph_Renderer ftgr = {0};
@@ -296,11 +313,6 @@ int main(int argc, char *argv[])
 
                 case SDL_KEYDOWN: {
                     switch (event.key.keysym.sym) {
-                        case SDLK_BACKSPACE:
-                        case SDLK_DELETE:
-                        case SDLK_RETURN:
-                        case SDLK_TAB:
-                        case SDLK_F3:
                         case SDLK_LEFT:
                         case SDLK_RIGHT:
                         case SDLK_UP:
@@ -309,8 +321,21 @@ int main(int argc, char *argv[])
                         case SDLK_END:
                         case SDLK_PAGEUP:
                         case SDLK_PAGEDOWN: {
-                            editor_process_key(&e, find_key(event.key.keysym.sym));
-                        }
+                            editor_process_key(&e, find_move_key(event.key.keysym.sym));
+                            update_last_stroke(&cr);
+                        } break;
+
+                        case SDLK_BACKSPACE:
+                        case SDLK_DELETE:
+                        case SDLK_RETURN:
+                        case SDLK_TAB: {
+                            editor_process_key(&e, find_edit_key(event.key.keysym.sym));
+                            update_last_stroke(&cr);
+                        } break;
+
+                        case SDLK_F3: {
+                            editor_process_key(&e, find_action_key(event.key.keysym.sym));
+                        } break;
                     }
                 } break;
 
@@ -341,7 +366,7 @@ int main(int argc, char *argv[])
                             size_t truex = (int) ftgr_get_glyph_index_near(&ftgr, s, cursor_coord.x);
 
                             editor_click(&e, truex, truey);
-                            cursor_move(&scr, &cr, e.cx, e.cy);
+                            cursor_move(&scr, e.cx, e.cy);
                         } break;
                     }
                 } break;
@@ -364,10 +389,10 @@ int main(int argc, char *argv[])
             const char *s = editor_get_line_at(&e, scr.cur.last_cy);
             const float last_width = (s != NULL) ? ftgr_get_s_width_n(&ftgr, s, e.cx) : 0;
             size_t ecx = ftgr_get_glyph_index_near(&ftgr, editor_get_line(&e), last_width);
-            cursor_move(&scr, &cr, ecx, e.cy);
+            cursor_move(&scr, ecx, e.cy);
         }
         if (e.cx != scr.cur.last_cx) {
-            cursor_move(&scr, &cr, e.cx, e.cy);
+            cursor_move(&scr, e.cx, e.cy);
         }
 
         // Update cursor position on the screen

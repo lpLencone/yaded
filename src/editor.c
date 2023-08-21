@@ -25,9 +25,9 @@ static void save_file(Editor *e);
 static void open_file(Editor *e);
 
 // Editor Operations
-static void editor_edit(Editor *e, EditorKeys key);
-static void editor_move(Editor *e, EditorKeys key);
-static void editor_action(Editor *e, EditorKeys key);
+static void editor_edit(Editor *e, EditorKey key);
+static void editor_move(Editor *e, EditorKey key);
+static void editor_action(Editor *e, EditorKey key);
 
 
 Editor editor_init(const char *filename)
@@ -50,7 +50,7 @@ Editor editor_init(const char *filename)
     return e;
 }
 
-void editor_process_key(Editor *e, EditorKeys key)
+void editor_process_key(Editor *e, EditorKey key)
 {
     switch (key) {
         case EDITOR_LEFT:
@@ -74,6 +74,9 @@ void editor_process_key(Editor *e, EditorKeys key)
         case EDITOR_SAVE: {
             editor_action(e, key);
         } break;
+
+        default:
+            assert(0);
     }
 }
 
@@ -173,7 +176,7 @@ static void new_line(Editor *e)
 
 /* Editor Operations */
 
-static void editor_move(Editor *e, EditorKeys key)
+static void editor_move(Editor *e, EditorKey key)
 {
     size_t line_size = editor_get_line_size(e);
     switch (key) {
@@ -233,7 +236,7 @@ static void editor_move(Editor *e, EditorKeys key)
     }
 }
 
-static void editor_edit(Editor *e, EditorKeys key)
+static void editor_edit(Editor *e, EditorKey key)
 {
     switch (key) {
         case EDITOR_BACKSPACE: {
@@ -262,7 +265,7 @@ static void editor_edit(Editor *e, EditorKeys key)
     }
 }
 
-static void editor_action(Editor *e, EditorKeys key)
+static void editor_action(Editor *e, EditorKey key)
 {
     switch (key) {
         case EDITOR_SAVE: {
