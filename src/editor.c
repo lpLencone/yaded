@@ -25,10 +25,10 @@ static void save_file(Editor *e);
 static void open_file(Editor *e);
 
 // Editor Operations
+static void editor_delete_char(Editor *e);
 static void editor_edit(Editor *e, EditorKey key);
 static void editor_move(Editor *e, EditorKey key);
 static void editor_action(Editor *e, EditorKey key);
-
 
 Editor editor_init(const char *filename)
 {
@@ -88,7 +88,7 @@ void editor_click(Editor *e, size_t x, size_t y)
     }
 }
 
-void editor_insert_text(Editor *e, const char *s)
+void editor_insert_s(Editor *e, const char *s)
 {
     Line *line = list_get(&e->lines, e->cy);
 
@@ -98,22 +98,6 @@ void editor_insert_text(Editor *e, const char *s)
 
     line_insert_text(line, s, e->cx);
     e->cx += strlen(s);
-}
-
-void editor_delete_char(Editor *e)
-{
-    if (e->cx == 0 && e->cy == 0) {
-        return;
-    }
-
-    editor_move(e, EDITOR_LEFT);
-
-    Line *line = list_get(&e->lines, e->cy);
-    if (e->cx == line->size) {
-        merge_line(e);
-    } else {
-        line_delete_char(line, e->cx);
-    }
 }
 
 size_t editor_get_line_size(const Editor *e)
@@ -175,6 +159,22 @@ static void new_line(Editor *e)
 }
 
 /* Editor Operations */
+
+static void editor_delete_char(Editor *e)
+{
+    if (e->cx == 0 && e->cy == 0) {
+        return;
+    }
+
+    editor_move(e, EDITOR_LEFT);
+
+    Line *line = list_get(&e->lines, e->cy);
+    if (e->cx == line->size) {
+        merge_line(e);
+    } else {
+        line_delete_char(line, e->cx);
+    }
+}
 
 static void editor_move(Editor *e, EditorKey key)
 {
@@ -282,9 +282,7 @@ static void editor_action(Editor *e, EditorKey key)
 static void save_file(Editor *e)
 {
     // TODO: change that shoot for a decent prompt
-    if (e->filename == NULL) {
-        e->filename = "outputtt";
-    }
+    assert(e->filename != NULL);
 
     FILE *file = fopen(e->filename, "w");
     if (file == NULL) {
@@ -330,12 +328,12 @@ static void open_file(Editor *e)
             if (sv_try_chop_by_delim(&chunk_sv, '\n', &chunk_line)) {
                 sv_c_str(c_chunk, chunk_line);
 
-                editor_insert_text(e, c_chunk);
+                editor_insert_s(e, c_chunk);
                 new_line(e);
             } else {
                 sv_c_str(c_chunk, chunk_line);
                 
-                editor_insert_text(e, c_chunk);
+                editor_insert_s(e, c_chunk);
                 chunk_sv = SV_NULL;
             }
 

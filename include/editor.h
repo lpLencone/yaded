@@ -37,8 +37,8 @@ typedef struct {
 } Editor;
 
 Editor editor_init(const char *filename);
-void editor_insert_text(Editor *e, const char *s);
-void editor_delete_char(Editor *e);
+
+void editor_insert_s(Editor *e, const char *s);
 void editor_process_key(Editor *e, EditorKey key);
 void editor_click(Editor *e, size_t x, size_t y);
 

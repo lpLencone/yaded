@@ -340,7 +340,7 @@ int main(int argc, char *argv[])
                 } break;
 
                 case SDL_TEXTINPUT: {
-                    editor_insert_text(&e, event.text.text);
+                    editor_insert_s(&e, event.text.text);
                 } break;
 
                 case SDL_MOUSEBUTTONDOWN: {
