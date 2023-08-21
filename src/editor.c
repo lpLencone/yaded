@@ -138,7 +138,6 @@ static void remove_line(Editor *e)
     if (e->cy == e->lines.length) {
         return;
     }
-
     list_remove(&e->lines, e->cy);
     editor_move(e, EDITOR_UP);
 }
@@ -147,7 +146,6 @@ static void merge_line(Editor *e)
 {
     Line *line_before = list_get(&e->lines, e->cy);
     Line *line_after = list_get(&e->lines, e->cy + 1);
-
     line_insert_text(line_before, line_after->s, line_before->size);
 
     editor_move(e, EDITOR_DOWN);

@@ -41,4 +41,7 @@ Vec4f vec4f_mul(Vec4f a, Vec4f b);
 Vec4f vec4f_div(Vec4f a, Vec4f b);
 
 
+float lerpf(float a, float b, float c);
+
+
 #endif // YADED_LA_H_

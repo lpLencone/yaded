@@ -26,7 +26,7 @@ typedef enum {
 typedef struct {
     List lines;
     size_t cx, cy;
-    
+
     const char *filename;
 } Editor;
 

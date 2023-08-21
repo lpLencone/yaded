@@ -17,16 +17,19 @@
 
 #include "freetype_glyph.h"
 #include "cursor_renderer.h"
-#define FONT_SIZE                64
-
-#define FONT_FILENAME            "fonts/VictorMono-Regular.ttf"
-#define CURSOR_VERT_FILENAME     "shaders/cursor_bar.vert"
-#define CURSOR_FRAG_FILENAME     "shaders/cursor_bar_smooth_blinking.frag"
-// #define CURSOR_FRAG_FILENAME     "shaders/cursor_bar.frag"
-#define CURSOR_WIDTH             2.5f
-#define CURSOR_VELOCITY          20.0f
-#define LINE_SEPARATION_HEIGHT   5 // pixels ig
-#define SCALE                    0.5f
+#define FONT_SIZE                   64
+    
+#define FONT_FILENAME               "fonts/VictorMono-Regular.ttf"
+#define CURSOR_VERT_FILENAME        "shaders/cursor_bar.vert"
+#define CURSOR_FRAG_FILENAME        "shaders/cursor_bar_smooth_blinking.frag"
+// #define CURSOR_FRAG_FILENAME        "shaders/cursor_bar.frag"
+#define CURSOR_WIDTH                2.5f
+#define CURSOR_VELOCITY             20.0f
+#define LINE_SEPARATION_HEIGHT      5 // pixels ig
+#define INITIAL_SCALE               2.0f
+#define FINAL_SCALE                 0.4f
+#define MAX_LINE_S_DISPLAY          20.0f
+#define ZOOM_THRESHOLD              250.0 * (INITIAL_SCALE / FINAL_SCALE)
 
 #define SCREEN_WIDTH        800
 #define SCREEN_HEIGHT       600
@@ -42,6 +45,7 @@ typedef struct {
         Vec2f pos;
         Vec2f vel;
         float scale;
+        float scale_vel;
     } cam;
     struct {
         Vec2f actual_pos;
@@ -181,12 +185,12 @@ void renderers_init(Cursor_Renderer *cr, FreeType_Glyph_Renderer *ftgr, FT_Face 
 {
     ftgr_init(ftgr, face, "shaders/freetype_glyph.vert", "shaders/freetype_glyph.frag");
     glUniform2f(ftgr->resolution, SCREEN_WIDTH, SCREEN_HEIGHT);
-    glUniform2f(ftgr->scale, SCALE, SCALE);
+    glUniform2f(ftgr->scale, INITIAL_SCALE, INITIAL_SCALE);
 
     *cr = cr_init(CURSOR_VERT_FILENAME, CURSOR_FRAG_FILENAME);
     glUniform1f(cr->height, FONT_SIZE);
     glUniform1f(cr->width, CURSOR_WIDTH);
-    glUniform2f(cr->scale, SCALE, SCALE);
+    glUniform2f(cr->scale, INITIAL_SCALE, INITIAL_SCALE);
 }
 
 void renderer_draw(FreeType_Glyph_Renderer *ftgr, Cursor_Renderer *cr, Editor *e, 
@@ -198,8 +202,11 @@ void renderer_draw(FreeType_Glyph_Renderer *ftgr, Cursor_Renderer *cr, Editor *e
 
     glUniform1f(ftgr->time, (float) SDL_GetTicks() / 1000.0f);
     glUniform2f(ftgr->camera, scr->cam.pos.x, -scr->cam.pos.y);
+    glUniform2f(ftgr->scale, scr->cam.scale, scr->cam.scale);
 
     ftgr_clear(ftgr);
+
+    float max_line_width = 0;
     
     Vec2f pos = {0};
     for (size_t cy = 0; cy < e->lines.length; cy++) {
@@ -207,7 +214,21 @@ void renderer_draw(FreeType_Glyph_Renderer *ftgr, Cursor_Renderer *cr, Editor *e
         pos.y = - (float) cy * (FONT_SIZE);
         const char *s = editor_get_line_at(e, cy);
         ftgr_render_string(ftgr, s, pos, vec4fs(1.0f), vec4fs(0.0f));
+        float line_width = ftgr_get_s_width_n(ftgr, s, strlen(s)) / 0.5f;
+        if (line_width > max_line_width) max_line_width = line_width;
     }
+
+    // Update camera scale
+    float target_scale = SCREEN_WIDTH / max_line_width; 
+
+    if (target_scale > INITIAL_SCALE) {
+        target_scale = INITIAL_SCALE;
+    } else if (target_scale < FINAL_SCALE) {
+        target_scale = FINAL_SCALE;
+    }
+    
+    scr->cam.scale_vel = 2.0f * (target_scale - scr->cam.scale);
+    scr->cam.scale += scr->cam.scale_vel * DELTA_TIME;
 
     ftgr_sync(ftgr);
     ftgr_draw(ftgr);
@@ -219,6 +240,7 @@ void renderer_draw(FreeType_Glyph_Renderer *ftgr, Cursor_Renderer *cr, Editor *e
     glUniform1f(cr->time, ((float) SDL_GetTicks() / 1000.0f));
     glUniform2f(cr->camera, scr->cam.pos.x, -scr->cam.pos.y);
     glUniform2f(cr->pos, scr->cur.render_pos.x, -scr->cur.render_pos.y);
+    glUniform2f(cr->scale, scr->cam.scale, scr->cam.scale);
 
     cr_draw();
 }
@@ -259,7 +281,7 @@ int main(int argc, char *argv[])
 
     Editor e = editor_init(filename);
     Screen scr = {0};
-    scr.cam.scale = SCALE;
+    scr.cam.scale = INITIAL_SCALE;
 
     bool quit = false;
     while (!quit) {
@@ -340,7 +362,7 @@ int main(int argc, char *argv[])
         // Update Cursor
         if (e.cy != scr.cur.last_cy) {
             const char *s = editor_get_line_at(&e, scr.cur.last_cy);
-            const float last_width = ftgr_get_s_width_n(&ftgr, s, e.cx);
+            const float last_width = (s != NULL) ? ftgr_get_s_width_n(&ftgr, s, e.cx) : 0;
             size_t ecx = ftgr_get_glyph_index_near(&ftgr, editor_get_line(&e), last_width);
             cursor_move(&scr, &cr, ecx, e.cy);
         }
@@ -364,6 +386,7 @@ int main(int argc, char *argv[])
         );
 
         // Update camera position on the screen
+
         scr.cam.vel = vec2f_mul(
             vec2f_sub(scr.cur.render_pos, scr.cam.pos), 
             vec2fs(2.0f)
