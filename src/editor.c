@@ -113,23 +113,22 @@ void editor_delete_char(Editor *e)
     }
 }
 
-size_t editor_get_line_size(Editor *e)
+size_t editor_get_line_size(const Editor *e)
 {
     Line *line = list_get(&e->lines, e->cy);
     return (line == NULL) ? 0: line->size;
 }
 
-const char *editor_get_line_at(Editor *e, size_t at)
+const char *editor_get_line_at(const Editor *e, size_t at)
 {
-    Line *line = list_get(&e->lines, at);
+    const Line *line = list_get(&e->lines, at);
     return (line == NULL) ? NULL: line->s;
 }
 
-const char *editor_get_line(Editor *e)
+const char *editor_get_line(const Editor *e)
 {
     return editor_get_line_at(e, e->cy);
 }
-
 
 /* Line operations */
 
@@ -279,6 +278,7 @@ static void editor_action(Editor *e, EditorKeys key)
 
 static void save_file(Editor *e)
 {
+    // TODO: change that shoot for a decent prompt
     if (e->filename == NULL) {
         e->filename = "outputtt";
     }

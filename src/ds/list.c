@@ -2,7 +2,7 @@
 
 #include <assert.h>
 
-static Node *get_node_at(List *list, size_t at);
+static Node *get_node_at(const List *list, size_t at);
 
 List list_init(void)
 {
@@ -12,10 +12,8 @@ List list_init(void)
     return list;
 }
 
-void list_end(List *list)
+void list_destroy(List *list)
 {
-    assert(list != NULL);
-    
     while (list->length > 0) {
         list_remove(list, 0);
     }
@@ -92,7 +90,7 @@ void list_remove(List *list, size_t at)
     list->length--;
 }
 
-void *list_get(List *list, size_t at)
+void *list_get(const List *list, size_t at)
 {
     if (at >= list->length) {
         return NULL;
@@ -102,7 +100,7 @@ void *list_get(List *list, size_t at)
 }
 
 
-static Node *get_node_at(List *list, size_t at)
+static Node *get_node_at(const List *list, size_t at)
 {
     Node *cursor = list->head;
     for (size_t i = 0; i < at; i++, cursor = cursor->next);
