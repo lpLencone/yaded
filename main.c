@@ -1,5 +1,6 @@
 #include <math.h>
 
+#include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -37,9 +38,6 @@
 #define FPS                         60
 #define DELTA_TIME                  (1.0f / FPS)
 #define DELTA_TIME_MS               (1000 / FPS)
-
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
 
 typedef struct {
     struct {
