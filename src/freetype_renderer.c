@@ -4,7 +4,7 @@
 #include <stdlib.h>
 
 typedef enum {
-    FT_GLYPH_ATTR_POS = 0,
+    FT_GLYPH_ATTR_POS,
     FT_GLYPH_ATTR_SIZE,
     FT_GLYPH_ATTR_UV_POS,
     FT_GLYPH_ATTR_UV_SIZE,
