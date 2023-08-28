@@ -98,14 +98,14 @@ void sr_solid_rect(Simple_Renderer *sr, Vec2f p, Vec2f s, Vec4f c)
         vec2fs(0), vec2fs(0), vec2fs(0), vec2fs(0));
 }
 
-void sr_image_rect(Simple_Renderer *sr, Vec2f p, Vec2f s)
+void sr_image_rect(Simple_Renderer *sr, Vec2f p, Vec2f s, Vec2f uvp, Vec2f uvs)
 {
     Vec4f c = vec4fs(0);
     sr_quad(
         sr, 
         p, vec2f_add(p, vec2f(s.x, 0)), vec2f_add(p, vec2f(0, s.y)), vec2f_add(p, s),
         c, c, c, c,
-        vec2fs(0), vec2f(1, 0), vec2f(1, 1), vec2f(0, 1));
+        uvp, vec2f_add(uvp, vec2f(uvs.x, 0)), vec2f_add(uvp, vec2f(0, uvs.y)), vec2f_add(uvp, uvs));
 }
 
 void sr_clear(Simple_Renderer *sr)
