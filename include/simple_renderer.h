@@ -76,7 +76,9 @@ void sr_solid_rect(
     Simple_Renderer *sr, 
     Vec2f p, Vec2f s, Vec4f c);
 
-void sr_image_rect(Simple_Renderer *sr, Vec2f p, Vec2f s, Vec2f uvp, Vec2f uvs);
+void sr_image_rect(
+    Simple_Renderer *sr, 
+    Vec2f p, Vec2f s, Vec2f uvp, Vec2f uvs);
 
 void sr_clear(Simple_Renderer *sr);
 void sr_sync(const Simple_Renderer *sr);
