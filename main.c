@@ -16,26 +16,28 @@
 #include "gl_extra.h"
 
 #include "freetype_glyph.h"
-#include "cursor_renderer.h"
+// #include "cursor_renderer.h"
+#include "simple_renderer.h"
 #define FONT_SIZE                   64
     
 #define FONT_FILENAME               "fonts/VictorMono-Regular.ttf"
-#define CURSOR_VERT_FILENAME        "shaders/cursor_bar.vert"
-#define CURSOR_FRAG_FILENAME        "shaders/cursor_bar_smooth_blinking.frag"
+// #define CURSOR_VERT_FILENAME        "shaders/cursor_bar.vert"
+// #define CURSOR_FRAG_FILENAME        "shaders/cursor_bar_smooth_blinking.frag"
 // #define CURSOR_FRAG_FILENAME        "shaders/cursor_bar.frag"
-#define CURSOR_WIDTH                2.5f
+
+#define CURSOR_WIDTH                5.0f
 #define CURSOR_VELOCITY             20.0f
 #define LINE_SEPARATION_HEIGHT      5 // pixels ig
-#define INITIAL_SCALE               2.0f
-#define FINAL_SCALE                 0.4f
+#define INITIAL_SCALE               1.8f
+#define FINAL_SCALE                 0.5f
 #define MAX_LINE_S_DISPLAY          20.0f
 #define ZOOM_THRESHOLD              250.0 * (INITIAL_SCALE / FINAL_SCALE)
 
-#define SCREEN_WIDTH        800
-#define SCREEN_HEIGHT       600
-#define FPS                 60
-#define DELTA_TIME          (1.0f / FPS)
-#define DELTA_TIME_MS       (1000 / FPS)
+#define SCREEN_WIDTH                800
+#define SCREEN_HEIGHT               600
+#define FPS                         60
+#define DELTA_TIME                  (1.0f / FPS)
+#define DELTA_TIME_MS               (1000 / FPS)
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -53,6 +55,7 @@ typedef struct {
         Vec2f vel;
         size_t last_cx;
         size_t last_cy;
+        Uint32 last_moved; // in milisec
     } cur;
 } Screen;
 
@@ -195,20 +198,31 @@ FT_Face FT_init(void)
 #undef ft_check_error
 }
 
-void renderers_init(Cursor_Renderer *cr, FreeType_Glyph_Renderer *ftgr, FT_Face face)
+void renderers_init(Simple_Renderer *sr, FreeType_Glyph_Renderer *ftgr, FT_Face face)
 {
+
     ftgr_init(ftgr, face, "shaders/freetype_glyph.vert", "shaders/freetype_glyph.frag");
     glUniform2f(ftgr->resolution, SCREEN_WIDTH, SCREEN_HEIGHT);
     glUniform2f(ftgr->scale, INITIAL_SCALE, INITIAL_SCALE);
 
-    *cr = cr_init(CURSOR_VERT_FILENAME, CURSOR_FRAG_FILENAME);
-    glUniform1f(cr->height, FONT_SIZE);
-    glUniform1f(cr->width, CURSOR_WIDTH);
-    glUniform2f(cr->scale, INITIAL_SCALE, INITIAL_SCALE);
+    sr_init(sr, "shaders/simple.vert", "shaders/simple_color.frag", "shaders/simple_image.frag", "shaders/simple_pride.frag");
+    sr_set_shader(sr, SHADER_COLOR);
+    glUniform2f(sr->resolution, SCREEN_WIDTH, SCREEN_HEIGHT);
+    sr_set_shader(sr, SHADER_IMAGE);
+    glUniform2f(sr->resolution, SCREEN_WIDTH, SCREEN_HEIGHT);
+    sr_set_shader(sr, SHADER_PRIDE);
+    glUniform2f(sr->resolution, SCREEN_WIDTH, SCREEN_HEIGHT);
+static_assert(SHADER_COUNT == 3, 
+              "The number of shaders has changed; update resolution for the new shaders");
+
+    // *cr = cr_init(CURSOR_VERT_FILENAME, CURSOR_FRAG_FILENAME);
+    // glUniform1f(cr->height, FONT_SIZE);
+    // glUniform1f(cr->width, CURSOR_WIDTH);
+    // glUniform2f(cr->scale, INITIAL_SCALE, INITIAL_SCALE);
 }
 
-void renderer_draw(FreeType_Glyph_Renderer *ftgr, Cursor_Renderer *cr, Editor *e, 
-                   Screen *scr)
+void renderer_draw(Simple_Renderer *sr, FreeType_Glyph_Renderer *ftgr,
+                   Editor *e, Screen *scr)
 {
     /*  Render Glyphs */
 
@@ -248,21 +262,32 @@ void renderer_draw(FreeType_Glyph_Renderer *ftgr, Cursor_Renderer *cr, Editor *e
     ftgr_draw(ftgr);
 
     /*  Render Cursor */
+    sr_set_shader(sr, SHADER_PRIDE);
 
-    cr_use(cr);
+    glUniform1f(sr->time, (float) SDL_GetTicks() / 1000.0f);
+    glUniform2f(sr->camera, scr->cam.pos.x, -scr->cam.pos.y);
+    glUniform2f(sr->scale, scr->cam.scale, scr->cam.scale);
 
-    glUniform1f(cr->time, ((float) SDL_GetTicks() / 1000.0f));
-    glUniform2f(cr->camera, scr->cam.pos.x, -scr->cam.pos.y);
-    glUniform2f(cr->pos, scr->cur.render_pos.x, -scr->cur.render_pos.y);
-    glUniform2f(cr->scale, scr->cam.scale, scr->cam.scale);
+    sr_clear(sr);
 
-    cr_draw();
+    Uint32 CURSOR_BLINK_THRESHOLD = 500;
+    Uint32 CURSOR_BLINK_PERIOD    = 500;
+    Uint32 t = SDL_GetTicks() - scr->cur.last_moved;
+    if (t < CURSOR_BLINK_THRESHOLD || (t / CURSOR_BLINK_PERIOD) % 2 != 0) {
+        // sr_solid_rect(sr, vec2f(scr->cur.render_pos.x, -scr->cur.render_pos.y),
+        //                   vec2f(CURSOR_WIDTH, FONT_SIZE),
+        //                   vec4fs(1.0));
+        sr_image_rect(sr, vec2f(scr->cur.render_pos.x, -scr->cur.render_pos.y), 
+                      vec2f(CURSOR_WIDTH, FONT_SIZE));
+    }
+
+    sr_sync(sr);
+    sr_draw(sr);
 }
 
-void update_last_stroke(Cursor_Renderer *cr)
+void update_last_moved(Screen *scr)
 {
-    cr_use(cr);
-    glUniform1f(cr->last_moved, ((float) SDL_GetTicks() / 1000.0f));
+    scr->cur.last_moved = SDL_GetTicks();
 }
 
 void cursor_move(Screen *scr, size_t cx, size_t cy)
@@ -272,7 +297,7 @@ void cursor_move(Screen *scr, size_t cx, size_t cy)
 }
 
 static FreeType_Glyph_Renderer ftgr = {0};
-static Cursor_Renderer cr = {0};
+static Simple_Renderer sr = {0};
 
 int main(int argc, char *argv[])
 {
@@ -288,8 +313,7 @@ int main(int argc, char *argv[])
     );
     scp(SDL_GL_CreateContext(window));
     init_glew();
-
-    renderers_init(&cr, &ftgr, face);
+    renderers_init(&sr, &ftgr, face);
 
     char *filename = NULL;
     if (argc > 1) {
@@ -322,7 +346,8 @@ int main(int argc, char *argv[])
                         case SDLK_PAGEUP:
                         case SDLK_PAGEDOWN: {
                             editor_process_key(&e, find_move_key(event.key.keysym.sym));
-                            update_last_stroke(&cr);
+                            update_last_moved(&scr);
+                            // update_last_stroke(&cr);
                         } break;
 
                         case SDLK_BACKSPACE:
@@ -330,7 +355,8 @@ int main(int argc, char *argv[])
                         case SDLK_RETURN:
                         case SDLK_TAB: {
                             editor_process_key(&e, find_edit_key(event.key.keysym.sym));
-                            update_last_stroke(&cr);
+                            update_last_moved(&scr);
+                            // update_last_stroke(&cr);
                         } break;
 
                         case SDLK_F3: {
@@ -341,34 +367,7 @@ int main(int argc, char *argv[])
 
                 case SDL_TEXTINPUT: {
                     editor_insert_s(&e, event.text.text);
-                } break;
-
-                case SDL_MOUSEBUTTONDOWN: {
-                    Vec2f mouse_coord = vec2f((float) event.button.x, (float) event.button.y);
-
-                    switch (event.button.button) {
-                        case SDL_BUTTON_LEFT: {
-                            int w, h;
-                            SDL_GetWindowSize(window, &w, &h);
-                            Vec2f cursor_coord = vec2f_add(
-                                mouse_coord, 
-                                vec2f_sub(scr.cam.pos, vec2f(w / 2.0f, h / 2.0f))
-                            );
-
-                            cursor_coord.y += FONT_SIZE;
-                            int truey = (int) floorf(cursor_coord.y / FONT_SIZE);
-                            if (truey < 0) truey = 0;
-                            if ((size_t) truey >= e.lines.length) truey = e.lines.length - 1;
-
-
-                            if (cursor_coord.x < 0) cursor_coord.x = 0;
-                            const char *s = editor_get_line_at(&e, truey);
-                            size_t truex = (int) ftgr_get_glyph_index_near(&ftgr, s, cursor_coord.x);
-
-                            editor_click(&e, truex, truey);
-                            cursor_move(&scr, e.cx, e.cy);
-                        } break;
-                    }
+                    update_last_moved(&scr);
                 } break;
             }
         }
@@ -381,8 +380,11 @@ int main(int argc, char *argv[])
         ftgr_use(&ftgr);
         glUniform2f(ftgr.resolution, (float) w, (float) h);
 
-        cr_use(&cr);
-        glUniform2f(cr.resolution, (float) w, (float) h);
+        // cr_use(&cr);
+        // glUniform2f(cr.resolution, (float) w, (float) h);
+
+        // sr_set_shader(&sr, SHADER_COLOR);
+        // glUniform2f(sr.resolution, (float) w, (float) h);
 
         // Update Cursor
         if (e.cy != scr.cur.last_cy) {
@@ -425,7 +427,7 @@ int main(int argc, char *argv[])
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        renderer_draw(&ftgr, &cr, &e, &scr);
+        renderer_draw(&sr, &ftgr, &e, &scr);
 
         const Uint32 duration = (SDL_GetTicks() - start);
         if (duration < DELTA_TIME_MS) {

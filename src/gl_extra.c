@@ -10,30 +10,36 @@
 #include <string.h>
 
 static const char *shader_type_as_cstr(GLuint shader);
-static GLenum shader_type_from_filename(const char *filename);
-static bool compile_shader_file(const char *filename, GLenum shader_type, GLuint *shader);
-static bool compile_shader_source(const GLchar *source, GLenum shader_type, GLuint *shader);
+static bool compile_shader_source(
+    const GLchar *source, 
+    GLenum shader_type, 
+    GLuint *shader
+);
 
-bool compile_shaders(const char **shaders_filenames, size_t n_shaders, 
-                     GLuint *shaders)
-{
-    for (size_t i = 0; i < n_shaders; i++) {
-        if (!compile_shader_file(shaders_filenames[i],
-                                 shader_type_from_filename(shaders_filenames[i]),
-                                 &shaders[i])) 
-        {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-void attach_shaders(GLuint program, GLuint *shaders, size_t n_shaders)
+void attach_shaders(GLuint program, GLuint shaders[], size_t n_shaders)
 {
     for (size_t i = 0; i < n_shaders; i++) {
         glAttachShader(program, shaders[i]);
     }
+}
+
+bool compile_shader(const char *filename, GLenum shader_type, GLuint *shader)
+{
+    char *source = slurp_file_into_malloced_cstr(filename);
+    
+    if (source == NULL) {
+        fprintf(stderr, "ERROR: failed to read file `%s`: %s\n", filename, strerror(errno));
+        errno = 0;
+        return false;
+    }
+
+    if (!compile_shader_source(source, shader_type, shader)) {
+        fprintf(stderr, "ERROR: failed to compile `%s` shader file\n", filename);
+        return false;
+    }
+
+    free(source);
+    return true;
 }
 
 bool link_program(GLuint program)
@@ -51,25 +57,6 @@ bool link_program(GLuint program)
         return false;
     }
 
-    return true;
-}
-
-static bool compile_shader_file(const char *filename, GLenum shader_type, GLuint *shader)
-{
-    char *source = slurp_file_into_malloced_cstr(filename);
-    
-    if (source == NULL) {
-        fprintf(stderr, "ERROR: failed to read file `%s`: %s\n", filename, strerror(errno));
-        errno = 0;
-        return false;
-    }
-
-    if (!compile_shader_source(source, shader_type, shader)) {
-        fprintf(stderr, "ERROR: failed to compile `%s` shader file\n", filename);
-        return false;
-    }
-
-    free(source);
     return true;
 }
 
@@ -92,17 +79,6 @@ static bool compile_shader_source(const GLchar *source, GLenum shader_type, GLui
     }
 
     return true;
-}
-
-static GLenum shader_type_from_filename(const char *filename)
-{
-    switch (filename[strlen(filename) - 1]) {
-        case 't': return GL_VERTEX_SHADER;
-        case 'g': return GL_FRAGMENT_SHADER;
-        default:
-            assert(false && "unreachable");
-            exit(1); // case assert disabled
-    }
 }
 
 static const char *shader_type_as_cstr(GLuint shader)

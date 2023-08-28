@@ -14,9 +14,8 @@
 
 #include <stdbool.h>
 
-bool compile_shaders(const char **shaders_filenames, size_t n_shaders, 
-                     GLuint *shaders);
-void attach_shaders(GLuint program, GLuint *shaders, size_t n_shaders);
+bool compile_shader(const char *filename, GLenum shader_type, GLuint *shader);
+void attach_shaders(GLuint program, GLuint shaders[], size_t n_shaders);
 bool link_program(GLuint program);
 
 #endif // YADED_GLEXTRA_H_

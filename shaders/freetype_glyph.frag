@@ -13,7 +13,8 @@ in vec2 glyph_uv_size;
 in vec4 glyph_fg_color;
 in vec4 glyph_bg_color;
 
-vec3 hsl2rgb(vec3 c);
+    float map01(float x);
+    vec3 hsl2rgb(vec3 c);
 
 void main() {
     float x = glyph_uv_pos.x;
@@ -22,32 +23,33 @@ void main() {
 
     vec4 tc = texture(font, t);
     vec2 frag_uv = gl_FragCoord.xy / resolution;
+
     vec4 rainbow = vec4(
         hsl2rgb(
             vec3(0.5 * time + frag_uv.x * frag_uv.y * (sin(x) + cos(y)), 
-                 0.5, 0.5)
+                    0.5, 0.5)
         ), 
         1.0
     );
-
+    
     gl_FragColor = tc.x * glyph_fg_color * rainbow;
 }
 
 // vec4 rainbow = vec4(
-//         hsl2rgb(
-//             vec3(
-//                 time + frag_uv.x * frag_uv.y, 
-//                 map01(sin((x / 5) * time + frag_uv.x * frag_uv.y)), 
-//                 map01(cos((y / 5) * time + sin(10 * frag_uv.x) + cos(10 * frag_uv.y)))
-//             )
-//         ), 
-//         1.0
-//     );
+//     hsl2rgb(
+//         vec3(0.5 * time + frag_uv.x * frag_uv.y * (sin(x) + cos(y)), 
+//                 0.5, 0.5)
+//     ), 
+//     1.0
+// );
 
 // vec4 rainbow = vec4(
-//         hsl2rgb(
-//             vec3(0.5 * time + frag_uv.x * frag_uv.y * (sin(x) + cos(y)), 
-//                  0.5, 0.5)
-//         ), 
-//         1.0
-//     );
+//     hsl2rgb(
+//         vec3(
+//             time + frag_uv.x * frag_uv.y, 
+//             map01(sin((x / 5) * time + frag_uv.x * frag_uv.y)), 
+//             map01(cos((y / 5) * time + sin(10 * frag_uv.x) + cos(10 * frag_uv.y)))
+//         )
+//     ), 
+//     1.0
+// );

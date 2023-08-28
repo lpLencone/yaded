@@ -99,22 +99,18 @@ void ftgr_init(FreeType_Glyph_Renderer *ftgr, FT_Face face,
 
     }
 
-    const char *shaders_filenames[] = {
-        vert_filename, frag_filename, "shaders/common.vert", "shaders/common.frag",
-    };
-    size_t n_shaders = sizeof(shaders_filenames) / sizeof(shaders_filenames[0]);
-
-    GLuint *shaders = malloc(n_shaders * sizeof(GLuint));
-    compile_shaders(shaders_filenames, n_shaders, shaders);
+    GLuint shaders[4];
+    compile_shader(vert_filename, GL_VERTEX_SHADER, &shaders[0]);
+    compile_shader(frag_filename, GL_FRAGMENT_SHADER, &shaders[1]);
+    compile_shader("shaders/common.vert", GL_VERTEX_SHADER, &shaders[2]);
+    compile_shader("shaders/common.frag", GL_FRAGMENT_SHADER, &shaders[3]);
 
     ftgr->program = glCreateProgram();
-    attach_shaders(ftgr->program, shaders, n_shaders);
+    attach_shaders(ftgr->program, shaders, 4);
     if (!link_program(ftgr->program)) {
         fprintf(stderr, "At %s : %d\n", __FILE__, __LINE__);
+        exit(1);
     }
-
-    free(shaders);
-
     ftgr->atlas_w = 0;
     ftgr->atlas_h = 0;
     init_glyph_texture_atlas(ftgr, face);
@@ -131,6 +127,13 @@ void ftgr_sync(FreeType_Glyph_Renderer *ftgr)
 {
     glBufferSubData(GL_ARRAY_BUFFER, 0, ftgr->glyph_count * sizeof(FreeType_Glyph), 
                     ftgr->glyph);
+}
+
+void ftgr_use(const FreeType_Glyph_Renderer *ftgr)
+{
+    glBindVertexArray(ftgr->vao);
+    glBindBuffer(GL_ARRAY_BUFFER, ftgr->vbo);
+    glUseProgram(ftgr->program);
 }
 
 void ftgr_draw(FreeType_Glyph_Renderer *ftgr)
@@ -229,13 +232,6 @@ size_t ftgr_get_glyph_index_near_pad(FreeType_Glyph_Renderer *ftgr, const char *
         }
     }
     return (i > 0) ? i - 1 : i;
-}
-
-void ftgr_use(const FreeType_Glyph_Renderer *ftgr)
-{
-    glBindVertexArray(ftgr->vao);
-    glBindBuffer(GL_ARRAY_BUFFER, ftgr->vbo);
-    glUseProgram(ftgr->program);
 }
 
 static void glyph_push(FreeType_Glyph_Renderer *ftgr, FreeType_Glyph glyph)
