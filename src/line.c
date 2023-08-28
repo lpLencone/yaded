@@ -18,7 +18,7 @@ Line line_init(void)
     return line;
 }
 
-void line_insert_text(Line *line, const char *s, size_t at)
+void line_insert_s(Line *line, const char *s, size_t at)
 {
     size_t slen = strlen(s);
 

@@ -18,7 +18,6 @@
 // Line Operations
 static void remove_line(Editor *e);
 static void merge_line(Editor *e);
-static void break_line(Editor *e);
 
 // File I/O
 static void save_file(Editor *e);
@@ -57,6 +56,10 @@ void editor_process_key(Editor *e, EditorKey key)
         case EDITOR_RIGHT:
         case EDITOR_UP:
         case EDITOR_DOWN:
+        case EDITOR_LEFTW:
+        case EDITOR_RIGHTW:
+        case EDITOR_LINE_HOME:
+        case EDITOR_LINE_END:
         case EDITOR_HOME:
         case EDITOR_END:
         case EDITOR_PAGEUP:
@@ -67,6 +70,8 @@ void editor_process_key(Editor *e, EditorKey key)
         case EDITOR_BACKSPACE:
         case EDITOR_DELETE:
         case EDITOR_RETURN:
+        case EDITOR_LINE_BELOW:
+        case EDITOR_LINE_ABOVE:
         case EDITOR_TAB: {
             editor_edit(e, key);
         } break;
@@ -80,6 +85,8 @@ void editor_process_key(Editor *e, EditorKey key)
     }
 }
 
+static_assert(EDITOR_KEY_COUNT == 19, "The number of editor keys has changed");
+
 void editor_insert_s(Editor *e, const char *s)
 {
     Line *line = list_get(&e->lines, e->cy);
@@ -88,7 +95,7 @@ void editor_insert_s(Editor *e, const char *s)
         e->cx = line->size;
     }
 
-    line_insert_text(line, s, e->cx);
+    line_insert_s(line, s, e->cx);
     e->cx += strlen(s);
 }
 
@@ -124,30 +131,37 @@ static void merge_line(Editor *e)
 {
     Line *line       = list_get(&e->lines, e->cy);
     Line *line_after = list_get(&e->lines, e->cy + 1);
-    line_insert_text(line, line_after->s, line->size);
+    line_insert_s(line, line_after->s, line->size);
 
     editor_move(e, EDITOR_DOWN);
     remove_line(e);
 }
 
-static void break_line(Editor *e)
+void editor_break_line(Editor *e)
 {
+    editor_new_line_at(e, e->cy + 1);
     Line *line = list_get(&e->lines, e->cy);
     Line *new_line = list_get(&e->lines, e->cy + 1);
 
-    line_insert_text(new_line, &line->s[e->cx], new_line->size);
+    line_insert_s(new_line, &line->s[e->cx], new_line->size);
 
     while (e->cx < line->size) {
         line_delete_char(line, e->cx);
     }
+
+    editor_move(e, EDITOR_DOWN);
+    editor_move(e, EDITOR_LINE_HOME);
 }
 
-static void new_line(Editor *e)
+void editor_new_line(Editor *e)
 {
+    editor_new_line_at(e, e->cy);
+}
+
+void editor_new_line_at(Editor *e, size_t at)
+{   
     Line line = line_init();
-    list_insert(&e->lines, &line, sizeof(line), e->cy + 1);
-    break_line(e);
-    editor_move(e, EDITOR_RIGHT);
+    list_insert(&e->lines, &line, sizeof(line), at);
 }
 
 /* Editor Operations */
@@ -170,10 +184,10 @@ static void editor_delete_char(Editor *e)
 
 static void editor_move(Editor *e, EditorKey key)
 {
-    size_t line_size = editor_get_line_size(e);
     switch (key) {
         case EDITOR_LEFT: {
             if (e->cx > 0) {
+                size_t line_size = editor_get_line_size(e);
                 if (e->cx > line_size) {
                     e->cx = line_size;
                     editor_move(e, EDITOR_LEFT);
@@ -182,16 +196,16 @@ static void editor_move(Editor *e, EditorKey key)
                 }
             } else if (e->cy > 0) {
                 editor_move(e, EDITOR_UP);
-                editor_move(e, EDITOR_END);
+                editor_move(e, EDITOR_LINE_END);
             }
         } break;
 
         case EDITOR_RIGHT: {
-            if (e->cx < line_size) {
+            if (e->cx < editor_get_line_size(e)) {
                 e->cx++;
             } else if (e->cy + 1 < e->lines.length) {
                 editor_move(e, EDITOR_DOWN);
-                editor_move(e, EDITOR_HOME);
+                editor_move(e, EDITOR_LINE_HOME);
             }
         } break;
 
@@ -207,12 +221,53 @@ static void editor_move(Editor *e, EditorKey key)
             }
         } break;
 
-        case EDITOR_HOME: {
+        case EDITOR_LEFTW: {
+            editor_move(e, EDITOR_LEFT);
+
+            const char *s = editor_get_line(e);
+            while (s[e->cx] == ' ') {
+                s = editor_get_line(e);
+                editor_move(e, EDITOR_LEFT);
+            }
+            while (s[e->cx] != ' ' && e->cx > 0) {
+                s = editor_get_line(e);
+                editor_move(e, EDITOR_LEFT);
+            }
+            if (e->cx != 0) {
+                editor_move(e, EDITOR_RIGHT);
+            }
+        } break;
+
+        case EDITOR_RIGHTW: {
+            editor_move(e, EDITOR_RIGHT);
+
+            const char *s = editor_get_line(e);
+            while (s[e->cx] == ' ') {
+                s = editor_get_line(e);
+                editor_move(e, EDITOR_RIGHT);
+            }
+            while (s[e->cx] != ' ' && e->cx < strlen(s)) {
+                s = editor_get_line(e);
+                editor_move(e, EDITOR_RIGHT);
+            }
+        } break;
+
+        case EDITOR_LINE_HOME: {
             e->cx = 0;
         } break;
 
+        case EDITOR_LINE_END: {
+            e->cx = editor_get_line_size(e);
+        } break;
+
+        case EDITOR_HOME: {
+            e->cx = 0;
+            e->cy = 0;
+        } break;
+
         case EDITOR_END: {
-            e->cx = line_size;
+            e->cy = e->lines.length - 1;
+            e->cx = editor_get_line_size(e);
         } break;
 
         case EDITOR_PAGEUP: {
@@ -245,11 +300,20 @@ static void editor_edit(Editor *e, EditorKey key)
         } break;
 
         case EDITOR_RETURN: {
-            new_line(e);
+            editor_break_line(e);
         } break;
 
         case EDITOR_TAB: {
             // TODO
+        } break;
+
+        case EDITOR_LINE_BELOW: {
+            editor_new_line_at(e, e->cy + 1);
+            editor_move(e, EDITOR_DOWN);
+        } break;
+
+        case EDITOR_LINE_ABOVE: {
+            editor_new_line(e);
         } break;
 
         default:
@@ -268,6 +332,8 @@ static void editor_action(Editor *e, EditorKey key)
             assert(0);
     }
 }
+
+static_assert(EDITOR_KEY_COUNT == 19, "The number of editor keys has changed");
 
 /* File I/O */
 
@@ -293,7 +359,7 @@ static void save_file(Editor *e)
 #define sv_c_str(c_chunk, sv_chunk)                         \
     c_chunk = malloc(chunk_line.count + 1);                 \
     memcpy(c_chunk, chunk_line.data, chunk_line.count);     \
-    c_chunk[chunk_line.count] = '\0';                       \
+    c_chunk[chunk_line.count] = '\0';                       
 
 static void open_file(Editor *e) 
 {   
@@ -321,7 +387,7 @@ static void open_file(Editor *e)
                 sv_c_str(c_chunk, chunk_line);
 
                 editor_insert_s(e, c_chunk);
-                new_line(e);
+                editor_break_line(e);
             } else {
                 sv_c_str(c_chunk, chunk_line);
                 

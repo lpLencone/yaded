@@ -39,6 +39,9 @@
 #define DELTA_TIME                  (1.0f / FPS)
 #define DELTA_TIME_MS               (1000 / FPS)
 
+#define SDL_CTRL    ((event.key.keysym.mod & KMOD_CTRL)  != 0)
+#define SDL_SHIFT   ((event.key.keysym.mod & KMOD_SHIFT) != 0)
+
 typedef struct {
     struct {
         Vec2f pos;
@@ -132,43 +135,34 @@ void init_glew(void)
 }
 
 const int keymap[] = {
-    SDLK_LEFT,
-    SDLK_RIGHT,
+    0, 0,
     SDLK_UP,
     SDLK_DOWN,
-    SDLK_HOME,
-    SDLK_END,
+    0, 0, 0, 0, 0, 0,
     SDLK_PAGEUP,
     SDLK_PAGEDOWN,
     SDLK_BACKSPACE,
     SDLK_DELETE,
-    SDLK_RETURN,
     SDLK_TAB,
-    SDLK_F3,
 };
 
 const size_t keymap_size = sizeof(keymap) / sizeof(keymap[0]);
 
 EditorKey find_move_key(int code) {
-    for (EditorKey ek = EDITOR_MOVE_KEY_START; ek < EDITOR_MOVE_KEY_END; ek++) {
+    for (EditorKey ek = EDITOR_LEFT; ek <= EDITOR_PAGEDOWN; ek++) {
         if (keymap[ek] == code) return ek;
     }
     assert(0);
 }
 
 EditorKey find_edit_key(int code) {
-    for (EditorKey ek = EDITOR_EDIT_KEY_START; ek < EDITOR_EDIT_KEY_END; ek++) {
+    for (EditorKey ek = EDITOR_BACKSPACE; ek <= EDITOR_TAB; ek++) {
         if (keymap[ek] == code) return ek;
     }
     assert(0);
 }
 
-EditorKey find_action_key(int code) {
-    for (EditorKey ek = EDITOR_ACTION_KEY_START; ek < EDITOR_ACTION_KEY_END; ek++) {
-        if (keymap[ek] == code) return ek;
-    }
-    assert(0);
-}
+static_assert(EDITOR_KEY_COUNT == 19, "The number of editor keys has changed");
 
 FT_Face FT_init(void)
 {
@@ -324,32 +318,76 @@ int main(int argc, char *argv[])
 
                 case SDL_KEYDOWN: {
                     switch (event.key.keysym.sym) {
-                        case SDLK_LEFT:
-                        case SDLK_RIGHT:
+                        case SDLK_q: {
+                            if (SDL_CTRL) {
+                                quit = true;
+                            }
+                        } break;
+
                         case SDLK_UP:
                         case SDLK_DOWN:
-                        case SDLK_HOME:
-                        case SDLK_END:
                         case SDLK_PAGEUP:
                         case SDLK_PAGEDOWN: {
                             editor_process_key(&e, find_move_key(event.key.keysym.sym));
                             update_last_moved(&scr);
-                            // update_last_stroke(&cr);
+                        } break;
+
+                        case SDLK_LEFT: {
+                            if (SDL_CTRL) {
+                                editor_process_key(&e, EDITOR_LEFTW);
+                            } else {
+                                editor_process_key(&e, EDITOR_LEFT);
+                            }
+                        } break;
+
+                        case SDLK_RIGHT: {
+                            if (SDL_CTRL) {
+                                editor_process_key(&e, EDITOR_RIGHTW);
+                            } else {
+                                editor_process_key(&e, EDITOR_RIGHT);
+                            }
+                        } break;
+
+                        case SDLK_HOME: {
+                            if (SDL_CTRL) {
+                                editor_process_key(&e, EDITOR_HOME);
+                            } else {
+                                editor_process_key(&e, EDITOR_LINE_HOME);
+                            }
+                        } break;
+
+                        case SDLK_END: {
+                            if (SDL_CTRL) {
+                                editor_process_key(&e, EDITOR_END);
+                            } else {
+                                editor_process_key(&e, EDITOR_LINE_END);
+                            }
                         } break;
 
                         case SDLK_BACKSPACE:
                         case SDLK_DELETE:
-                        case SDLK_RETURN:
                         case SDLK_TAB: {
                             editor_process_key(&e, find_edit_key(event.key.keysym.sym));
                             update_last_moved(&scr);
-                            // update_last_stroke(&cr);
                         } break;
 
-                        case SDLK_F3: {
-                            editor_process_key(&e, find_action_key(event.key.keysym.sym));
+                        case SDLK_RETURN: {
+                            if (SDL_CTRL) {
+                                editor_process_key(&e, EDITOR_LINE_BELOW);
+                            } else if (SDL_SHIFT) {
+                                editor_process_key(&e, EDITOR_LINE_ABOVE);
+                            } else {
+                                editor_process_key(&e, EDITOR_RETURN);
+                            }
+                        } break;
+
+                        case SDLK_s: {
+                            if (SDL_CTRL) {
+                                editor_process_key(&e, EDITOR_SAVE);
+                            }
                         } break;
                     }
+static_assert(EDITOR_KEY_COUNT == 19, "The number of editor keys has changed");
                 } break;
 
                 case SDL_TEXTINPUT: {

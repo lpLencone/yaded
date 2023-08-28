@@ -16,7 +16,7 @@ typedef struct {
 
 Line line_init(void);
 
-void line_insert_text(Line *line, const char *s, size_t at);
+void line_insert_s(Line *line, const char *s, size_t at);
 void line_delete_char(Line *line, size_t at);
 
 #endif // YADED_LINE_H_
