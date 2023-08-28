@@ -215,13 +215,13 @@ static_assert(SHADER_COUNT == 3,
 void renderer_draw(Simple_Renderer *sr, FreeType_Renderer *ftr,
                    Editor *e, Screen *scr)
 {
+    // Render Glyphs
     sr_set_shader(sr, SHADER_PRIDE);
 
     glUniform1f(sr->time, (float) SDL_GetTicks() / 1000.0f);
     glUniform2f(sr->camera, scr->cam.pos.x, -scr->cam.pos.y);
     glUniform2f(sr->scale, scr->cam.scale, scr->cam.scale);
 
-    // Render Glyphs
     float max_line_width = 0;
     
     Vec2f pos = {0};
@@ -229,17 +229,39 @@ void renderer_draw(Simple_Renderer *sr, FreeType_Renderer *ftr,
         pos.x = 0.0f;
         pos.y = - (float) cy * (FONT_SIZE);
         const char *s = editor_get_line_at(e, cy);
-        ftr_render_string(ftr, sr, s, pos, vec4fs(1.0f), vec4fs(0.0f));
+        ftr_render_string(ftr, sr, s, pos);
 
         float line_width = ftr_get_s_width_n(ftr, s, strlen(s)) / 0.5f;
         if (line_width > max_line_width) max_line_width = line_width;
     }
-
   
     sr_sync(sr);
     sr_draw(sr);
-    
+    sr_clear(sr);
+
+    // Render Cursor
+
+    sr_set_shader(sr, SHADER_COLOR);
+
+    glUniform1f(sr->time, (float) SDL_GetTicks() / 1000.0f);
+    glUniform2f(sr->camera, scr->cam.pos.x, -scr->cam.pos.y);
+    glUniform2f(sr->scale, scr->cam.scale, scr->cam.scale);
+
+    Uint32 CURSOR_BLINK_THRESHOLD = 500;
+    Uint32 CURSOR_BLINK_PERIOD    = 500;
+    Uint32 t = SDL_GetTicks() - scr->cur.last_moved;
+    if (t < CURSOR_BLINK_THRESHOLD || (t / CURSOR_BLINK_PERIOD) % 2 != 0) {
+        sr_solid_rect(sr, vec2f(scr->cur.render_pos.x, -scr->cur.render_pos.y),
+                          vec2f(CURSOR_WIDTH, FONT_SIZE),
+                          vec4fs(1.0));
+    }
+
+    sr_sync(sr);
+    sr_draw(sr);
+    sr_clear(sr);
+
     // Update camera scale
+
     float target_scale = SCREEN_WIDTH / max_line_width; 
 
     if (target_scale > INITIAL_SCALE) {
@@ -250,30 +272,6 @@ void renderer_draw(Simple_Renderer *sr, FreeType_Renderer *ftr,
     
     scr->cam.scale_vel = 2.0f * (target_scale - scr->cam.scale);
     scr->cam.scale += scr->cam.scale_vel * DELTA_TIME;
-
-    // Render Cursor
-
-    sr_set_shader(sr, SHADER_COLOR);
-
-    glUniform1f(sr->time, (float) SDL_GetTicks() / 1000.0f);
-    glUniform2f(sr->camera, scr->cam.pos.x, -scr->cam.pos.y);
-    glUniform2f(sr->scale, scr->cam.scale, scr->cam.scale);
-
-    sr_clear(sr);
-
-    Uint32 CURSOR_BLINK_THRESHOLD = 500;
-    Uint32 CURSOR_BLINK_PERIOD    = 500;
-    Uint32 t = SDL_GetTicks() - scr->cur.last_moved;
-    if (t < CURSOR_BLINK_THRESHOLD || (t / CURSOR_BLINK_PERIOD) % 2 != 0) {
-        sr_solid_rect(sr, vec2f(scr->cur.render_pos.x, -scr->cur.render_pos.y),
-                          vec2f(CURSOR_WIDTH, FONT_SIZE),
-                          vec4fs(1.0));
-        // sr_image_rect(sr, vec2f(scr->cur.render_pos.x, -scr->cur.render_pos.y), 
-        //               vec2f(CURSOR_WIDTH, FONT_SIZE));
-    }
-
-    sr_sync(sr);
-    sr_draw(sr);
 }
 
 void update_last_moved(Screen *scr)

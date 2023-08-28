@@ -25,19 +25,13 @@ static void init_glyph_texture_atlas(FreeType_Renderer *ftr, FT_Face face);
 
 void ftr_init(FreeType_Renderer *ftr, FT_Face face)
 {
-    // GLuint shaders[4];
-    // compile_shader(vert_filename, GL_VERTEX_SHADER, &shaders[0]);
-    // compile_shader(frag_filename, GL_FRAGMENT_SHADER, &shaders[1]);
-    // compile_shader("shaders/common.vert", GL_VERTEX_SHADER, &shaders[2]);
-    // compile_shader("shaders/common.frag", GL_FRAGMENT_SHADER, &shaders[3]);
-
     ftr->atlas_w = 0;
     ftr->atlas_h = 0;
     init_glyph_texture_atlas(ftr, face);
 }
 
-void ftr_render_string_n(FreeType_Renderer *ftr, Simple_Renderer *sr, const char *s, size_t n,
-                          Vec2f pos, Vec4f fg_color, Vec4f bg_color)
+void ftr_render_string_n(FreeType_Renderer *ftr, Simple_Renderer *sr,   
+                         const char *s, size_t n, Vec2f pos)
 {
     for (size_t i = 0; i < n; i++) {
         Glyph_Info gi = ftr->gi[(int) s[i]];
@@ -49,15 +43,6 @@ void ftr_render_string_n(FreeType_Renderer *ftr, Simple_Renderer *sr, const char
         pos.x += gi.ax;
         pos.y += gi.ay;
 
-        // FreeType_Glyph glyph = {
-        //     .pos        = vec2f(x2, -y2),
-        //     .size       = vec2f(w, -h),
-        //     .uv_pos     = vec2f(gi.tx, 0.0f),
-        //     .uv_size    = vec2f(gi.bw / (float) ftr->atlas_w, gi.bh / (float) ftr->atlas_h),
-        //     .bg_color   = bg_color,
-        //     .fg_color   = fg_color,
-        // };
-
         sr_image_rect(
             sr, 
             vec2f(x2, -y2), 
@@ -67,10 +52,10 @@ void ftr_render_string_n(FreeType_Renderer *ftr, Simple_Renderer *sr, const char
     }
 }
 
-void ftr_render_string(FreeType_Renderer *ftr, Simple_Renderer *sr, const char *s, Vec2f pos, 
-                        Vec4f fg_color, Vec4f bg_color)
+void ftr_render_string(FreeType_Renderer *ftr, Simple_Renderer *sr, 
+                       const char *s, Vec2f pos)
 {
-    ftr_render_string_n(ftr, sr, s, strlen(s), pos, fg_color, bg_color);
+    ftr_render_string_n(ftr, sr, s, strlen(s), pos);
 }
 
 float ftr_get_s_width_n(FreeType_Renderer *ftr, const char *s, size_t n)
@@ -157,8 +142,9 @@ static void init_glyph_texture_atlas(FreeType_Renderer *ftr, FT_Face face)
     glGenTextures(1, &ftr->glyph_texture);
     glBindTexture(GL_TEXTURE_2D, ftr->glyph_texture);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, ftr->atlas_w, ftr->atlas_h, 0, 
-                 GL_RED, GL_UNSIGNED_BYTE, NULL);
+    glTexImage2D(
+        GL_TEXTURE_2D, 0, GL_RED, ftr->atlas_w, ftr->atlas_h, 0, 
+        GL_RED, GL_UNSIGNED_BYTE, NULL);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -181,9 +167,10 @@ static void init_glyph_texture_atlas(FreeType_Renderer *ftr, FT_Face face)
         ftr->gi[i].bt = face->glyph->bitmap_top;
         ftr->gi[i].tx = (float) x / (float) ftr->atlas_w;
 
-        glTexSubImage2D(GL_TEXTURE_2D, 0, x, 0, face->glyph->bitmap.width, 
-                        face->glyph->bitmap.rows, GL_RED, GL_UNSIGNED_BYTE, 
-                        face->glyph->bitmap.buffer);
+        glTexSubImage2D(
+            GL_TEXTURE_2D, 0, x, 0, face->glyph->bitmap.width, 
+            face->glyph->bitmap.rows, GL_RED, GL_UNSIGNED_BYTE, 
+            face->glyph->bitmap.buffer);
 
         x += face->glyph->bitmap.width;
     }
