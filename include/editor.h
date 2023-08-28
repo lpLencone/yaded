@@ -40,7 +40,6 @@ Editor editor_init(const char *filename);
 
 void editor_insert_s(Editor *e, const char *s);
 void editor_process_key(Editor *e, EditorKey key);
-void editor_click(Editor *e, size_t x, size_t y);
 
 size_t editor_get_line_size(const Editor *e);
 const char *editor_get_line(const Editor *e);

@@ -80,14 +80,6 @@ void editor_process_key(Editor *e, EditorKey key)
     }
 }
 
-void editor_click(Editor *e, size_t x, size_t y)
-{
-    e->cx = x;
-    if (y < e->lines.length) {
-        e->cy = y;
-    }
-}
-
 void editor_insert_s(Editor *e, const char *s)
 {
     Line *line = list_get(&e->lines, e->cy);
@@ -130,9 +122,9 @@ static void remove_line(Editor *e)
 
 static void merge_line(Editor *e)
 {
-    Line *line_before = list_get(&e->lines, e->cy);
+    Line *line       = list_get(&e->lines, e->cy);
     Line *line_after = list_get(&e->lines, e->cy + 1);
-    line_insert_text(line_before, line_after->s, line_before->size);
+    line_insert_text(line, line_after->s, line->size);
 
     editor_move(e, EDITOR_DOWN);
     remove_line(e);
