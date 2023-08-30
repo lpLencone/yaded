@@ -6,6 +6,10 @@
 static void setup_vertices_and_buffers(Simple_Renderer *sr);
 static void get_uniforms_loc(Simple_Renderer *sr);
 
+static void sr_draw(const Simple_Renderer *sr);
+static void sr_clear(Simple_Renderer *sr);
+static void sr_sync(const Simple_Renderer *sr);
+
 void sr_init(
     Simple_Renderer *sr, 
     const char *vert_filename, 
@@ -78,6 +82,9 @@ void sr_triangle(
     sr_vertex(sr, p2, c2, uv2);
 }
 
+// 2 - 3
+// | \ |
+// 0 - 1
 void sr_quad(
     Simple_Renderer *sr,
     Vec2f p0, Vec2f p1, Vec2f p2, Vec2f p3,
@@ -108,23 +115,28 @@ void sr_image_rect(Simple_Renderer *sr, Vec2f p, Vec2f s, Vec2f uvp, Vec2f uvs)
         uvp, vec2f_add(uvp, vec2f(uvs.x, 0)), vec2f_add(uvp, vec2f(0, uvs.y)), vec2f_add(uvp, uvs));
 }
 
-void sr_clear(Simple_Renderer *sr)
+void sr_flush(Simple_Renderer *sr)
+{
+    sr_sync(sr);
+    sr_draw(sr);
+    sr_clear(sr);
+}
+
+static void sr_clear(Simple_Renderer *sr)
 {
     sr->buffer_count = 0;
 }
 
-void sr_sync(const Simple_Renderer *sr)
+static void sr_sync(const Simple_Renderer *sr)
 {
     glBufferSubData(GL_ARRAY_BUFFER, 0, sr->buffer_count * sizeof(Simple_Vertex), 
                     sr->buffer);
 }
 
-void sr_draw(const Simple_Renderer *sr)
+static void sr_draw(const Simple_Renderer *sr)
 {
     glDrawArrays(GL_TRIANGLES, 0, sr->buffer_count);
 }
-
-// STATIC
 
 typedef enum {
     SVA_UV,

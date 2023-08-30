@@ -1,16 +1,11 @@
-#include <math.h>
-
 #include <assert.h>
+#include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include <SDL2/SDL.h>
-
-#define GLEW_STATIC
-#include <GL/glew.h>
-#define GL_GLEXT_PROTOTYPES
-#include <SDL2/SDL_opengl.h>
 
 #include "la.h"
 #include "editor.h"
@@ -18,20 +13,15 @@
 
 #include "freetype_renderer.h"
 #include "simple_renderer.h"
+
 #define FONT_SIZE                   64
     
 #define FONT_FILENAME               "fonts/VictorMono-Regular.ttf"
-// #define CURSOR_VERT_FILENAME        "shaders/cursor_bar.vert"
-// #define CURSOR_FRAG_FILENAME        "shaders/cursor_bar_smooth_blinking.frag"
-// #define CURSOR_FRAG_FILENAME        "shaders/cursor_bar.frag"
 
-#define CURSOR_WIDTH                5.0f
-#define CURSOR_VELOCITY             20.0f
-#define LINE_SEPARATION_HEIGHT      5 // pixels ig
-#define INITIAL_SCALE               1.8f
-#define FINAL_SCALE                 0.5f
-#define MAX_LINE_S_DISPLAY          20.0f
-#define ZOOM_THRESHOLD              250.0 * (INITIAL_SCALE / FINAL_SCALE)
+#define CUR_INIT_WIDTH              5.0f
+#define CUR_VEL                     20.0f
+#define CAM_INIT_SCALE              1.8f
+#define CAM_FINAL_SCALE             0.5f
 
 #define SCREEN_WIDTH                800
 #define SCREEN_HEIGHT               600
@@ -50,9 +40,12 @@ typedef struct {
         float scale_vel;
     } cam;
     struct {
+        Vec2f vel;
         Vec2f actual_pos;
         Vec2f render_pos;
-        Vec2f vel;
+        float actual_width;
+        float render_width;
+        float height;
         size_t last_cx;
         size_t last_cy;
         Uint32 last_moved; // in milisec
@@ -79,8 +72,9 @@ void *scp(void *ptr)
     return ptr;
 }
 
-void MessageCallback(GLenum source, GLenum type, GLuint id, GLenum severity,
-                     GLsizei length, const GLchar* message, const void* userParam)
+void MessageCallback(
+    GLenum source, GLenum type, GLuint id, GLenum severity,
+    GLsizei length, const GLchar* message, const void* userParam)
 {
     (void) source;
     (void) id;
@@ -149,20 +143,20 @@ const int keymap[] = {
 const size_t keymap_size = sizeof(keymap) / sizeof(keymap[0]);
 
 EditorKey find_move_key(int code) {
-    for (EditorKey ek = EDITOR_LEFT; ek <= EDITOR_PAGEDOWN; ek++) {
+    for (EditorKey ek = EDITOR_KEY_LEFT; ek <= EDITOR_KEY_PAGEDOWN; ek++) {
         if (keymap[ek] == code) return ek;
     }
     assert(0);
 }
 
 EditorKey find_edit_key(int code) {
-    for (EditorKey ek = EDITOR_BACKSPACE; ek <= EDITOR_TAB; ek++) {
+    for (EditorKey ek = EDITOR_KEY_BACKSPACE; ek <= EDITOR_KEY_TAB; ek++) {
         if (keymap[ek] == code) return ek;
     }
     assert(0);
 }
 
-static_assert(EDITOR_KEY_COUNT == 19, "The number of editor keys has changed");
+static_assert(EDITOR_KEY_COUNT == 23, "The number of editor keys has changed");
 
 FT_Face FT_init(void)
 {
@@ -204,15 +198,21 @@ static_assert(SHADER_COUNT == 3,
               "The number of shaders has changed; update resolution for the new shaders");
 }
 
-void renderer_draw(Simple_Renderer *sr, FreeType_Renderer *ftr,
+void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *ftr,
                    Editor *e, Screen *scr)
 {
+    // TODO: set viewport only on window change
+    int w, h;
+    SDL_GetWindowSize(window, &w, &h);
+    glViewport(0, 0, w, h);
+
     // Render Glyphs
     sr_set_shader(sr, SHADER_PRIDE);
 
     glUniform1f(sr->time, (float) SDL_GetTicks() / 1000.0f);
     glUniform2f(sr->camera, scr->cam.pos.x, -scr->cam.pos.y);
     glUniform2f(sr->scale, scr->cam.scale, scr->cam.scale);
+    glUniform2f(sr->resolution, w, h);
 
     float max_line_width = 0;
     
@@ -221,45 +221,57 @@ void renderer_draw(Simple_Renderer *sr, FreeType_Renderer *ftr,
         pos.x = 0.0f;
         pos.y = - (float) cy * (FONT_SIZE);
         const char *s = editor_get_line_at(e, cy);
-        ftr_render_string(ftr, sr, s, pos);
+        ftr_render_s(ftr, sr, s, pos);
 
         float line_width = ftr_get_s_width_n(ftr, s, strlen(s)) / 0.5f;
         if (line_width > max_line_width) max_line_width = line_width;
     }
   
-    sr_sync(sr);
-    sr_draw(sr);
-    sr_clear(sr);
+    sr_flush(sr);
 
     // Render Cursor
-
     sr_set_shader(sr, SHADER_COLOR);
 
     glUniform1f(sr->time, (float) SDL_GetTicks() / 1000.0f);
     glUniform2f(sr->camera, scr->cam.pos.x, -scr->cam.pos.y);
     glUniform2f(sr->scale, scr->cam.scale, scr->cam.scale);
+    glUniform2f(sr->resolution, w, h);
 
-    Uint32 CURSOR_BLINK_THRESHOLD = 500;
-    Uint32 CURSOR_BLINK_PERIOD    = 500;
-    Uint32 t = SDL_GetTicks() - scr->cur.last_moved;
-    if (t < CURSOR_BLINK_THRESHOLD || (t / CURSOR_BLINK_PERIOD) % 2 != 0) {
-        sr_solid_rect(sr, vec2f(scr->cur.render_pos.x, -scr->cur.render_pos.y),
-                          vec2f(CURSOR_WIDTH, FONT_SIZE),
-                          vec4fs(1.0));
+    if (e->mode == EDITOR_MODE_EDITING) {
+        scr->cur.actual_width = CUR_INIT_WIDTH;
+        Uint32 CURSOR_BLINK_THRESHOLD = 500;
+        Uint32 CURSOR_BLINK_PERIOD    = 500;
+        Uint32 t = SDL_GetTicks() - scr->cur.last_moved;
+        if (t < CURSOR_BLINK_THRESHOLD || (t / CURSOR_BLINK_PERIOD) % 2 != 0) {
+            sr_solid_rect(
+                sr, vec2f(scr->cur.render_pos.x, -scr->cur.render_pos.y),
+                    vec2f(scr->cur.actual_width, scr->cur.height),
+                    vec4fs(1.0));
+        }
+    } else if (e->mode == EDITOR_MODE_BROWSING) {
+        const char *s = editor_get_line(e);
+        const size_t slen = strlen(s);
+        scr->cur.actual_width = ftr_get_s_width_n(ftr, s, slen);
+        scr->cur.render_width += 
+            (scr->cur.actual_width - scr->cur.render_width) * 10 * DELTA_TIME;
+
+        sr_solid_rect(
+            sr, vec2f(scr->cur.render_pos.x - scr->cur.render_width / 2, -scr->cur.render_pos.y),
+                vec2f(scr->cur.render_width, scr->cur.height),
+                vec4fs(0.5f)
+        );
     }
 
-    sr_sync(sr);
-    sr_draw(sr);
-    sr_clear(sr);
+    sr_flush(sr);
 
     // Update camera scale
 
     float target_scale = SCREEN_WIDTH / max_line_width; 
 
-    if (target_scale > INITIAL_SCALE) {
-        target_scale = INITIAL_SCALE;
-    } else if (target_scale < FINAL_SCALE) {
-        target_scale = FINAL_SCALE;
+    if (target_scale > CAM_INIT_SCALE) {
+        target_scale = CAM_INIT_SCALE;
+    } else if (target_scale < CAM_FINAL_SCALE) {
+        target_scale = CAM_FINAL_SCALE;
     }
     
     scr->cam.scale_vel = 2.0f * (target_scale - scr->cam.scale);
@@ -289,21 +301,22 @@ int main(int argc, char *argv[])
     gl_attr();
     SDL_Window *window;
     window = scp(
-        SDL_CreateWindow("ged: geimer editor", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 
-                         SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL)
+        SDL_CreateWindow(
+            "ged: geimer editor", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 
+            SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL)
     );
     scp(SDL_GL_CreateContext(window));
     init_glew();
     renderers_init(&sr, &ftr, face);
 
-    char *filename = NULL;
-    if (argc > 1) {
-        filename = argv[1];
-    }
-
-    Editor e = editor_init(filename);
+    assert(argc > 1);
+    Editor e = editor_init(argv[1]);
+    
     Screen scr = {0};
-    scr.cam.scale = INITIAL_SCALE;
+    scr.cam.scale = CAM_INIT_SCALE;
+    scr.cur.actual_width = CUR_INIT_WIDTH;
+    scr.cur.render_width = CUR_INIT_WIDTH;
+    scr.cur.height = FONT_SIZE;
 
     bool quit = false;
     while (!quit) {
@@ -334,33 +347,33 @@ int main(int argc, char *argv[])
 
                         case SDLK_LEFT: {
                             if (SDL_CTRL) {
-                                editor_process_key(&e, EDITOR_LEFTW);
+                                editor_process_key(&e, EDITOR_KEY_LEFTW);
                             } else {
-                                editor_process_key(&e, EDITOR_LEFT);
+                                editor_process_key(&e, EDITOR_KEY_LEFT);
                             }
                         } break;
 
                         case SDLK_RIGHT: {
                             if (SDL_CTRL) {
-                                editor_process_key(&e, EDITOR_RIGHTW);
+                                editor_process_key(&e, EDITOR_KEY_RIGHTW);
                             } else {
-                                editor_process_key(&e, EDITOR_RIGHT);
+                                editor_process_key(&e, EDITOR_KEY_RIGHT);
                             }
                         } break;
 
                         case SDLK_HOME: {
                             if (SDL_CTRL) {
-                                editor_process_key(&e, EDITOR_HOME);
+                                editor_process_key(&e, EDITOR_KEY_HOME);
                             } else {
-                                editor_process_key(&e, EDITOR_LINE_HOME);
+                                editor_process_key(&e, EDITOR_KEY_LINE_HOME);
                             }
                         } break;
 
                         case SDLK_END: {
                             if (SDL_CTRL) {
-                                editor_process_key(&e, EDITOR_END);
+                                editor_process_key(&e, EDITOR_KEY_END);
                             } else {
-                                editor_process_key(&e, EDITOR_LINE_END);
+                                editor_process_key(&e, EDITOR_KEY_LINE_END);
                             }
                         } break;
 
@@ -373,42 +386,42 @@ int main(int argc, char *argv[])
 
                         case SDLK_RETURN: {
                             if (SDL_CTRL) {
-                                editor_process_key(&e, EDITOR_LINE_BELOW);
+                                editor_process_key(&e, EDITOR_KEY_LINE_BELOW);
                             } else if (SDL_SHIFT) {
-                                editor_process_key(&e, EDITOR_LINE_ABOVE);
+                                editor_process_key(&e, EDITOR_KEY_LINE_ABOVE);
                             } else {
-                                editor_process_key(&e, EDITOR_RETURN);
+                                editor_process_key(&e, EDITOR_KEY_RETURN);
                             }
                         } break;
 
                         case SDLK_s: {
                             if (SDL_CTRL) {
-                                editor_process_key(&e, EDITOR_SAVE);
+                                editor_process_key(&e, EDITOR_KEY_SAVE);
+                            }
+                        } break;
+
+                        case SDLK_o: {
+                            if (SDL_CTRL) {
+                                editor_open(&e, "..");
                             }
                         } break;
                     }
-static_assert(EDITOR_KEY_COUNT == 19, "The number of editor keys has changed");
+    static_assert(EDITOR_KEY_COUNT == 23, "The number of editor keys has changed");
                 } break;
 
                 case SDL_TEXTINPUT: {
-                    editor_insert_s(&e, event.text.text);
+                    editor_write(&e, event.text.text);
                     update_last_moved(&scr);
                 } break;
             }
         }
 
-        // TODO: set viewport only on window change
-
-        int w, h;
-        SDL_GetWindowSize(window, &w, &h);
-        glViewport(0, 0, w, h);
-
-        // sr_set_shader(&sr, SHADER_COLOR);
-        // glUniform2f(sr.resolution, (float) w, (float) h);
-
         // Update Cursor
         if (e.cy != scr.cur.last_cy) {
-            const char *s = editor_get_line_at(&e, scr.cur.last_cy);
+            const char *s = (scr.cur.last_cy < e.lines.length) 
+                ? editor_get_line_at(&e, scr.cur.last_cy) 
+                : NULL;
+                
             const float last_width = (s != NULL) ? ftr_get_s_width_n(&ftr, s, e.cx) : 0;
             size_t ecx = ftr_get_glyph_index_near(&ftr, editor_get_line(&e), last_width);
             cursor_move(&scr, ecx, e.cy);
@@ -420,12 +433,13 @@ static_assert(EDITOR_KEY_COUNT == 19, "The number of editor keys has changed");
         // Update cursor position on the screen
         scr.cur.actual_pos.y = e.cy * FONT_SIZE;
         size_t n = editor_get_line_size(&e);
-        scr.cur.actual_pos.x = 
-            ftr_get_s_width_n(&ftr, editor_get_line(&e), (e.cx > n) ? n : e.cx);
+        scr.cur.actual_pos.x = (e.mode == EDITOR_MODE_EDITING) 
+            ? ftr_get_s_width_n(&ftr, editor_get_line(&e), (e.cx > n) ? n : e.cx)
+            : ftr_get_s_width_n(&ftr, editor_get_line(&e), n) / 2;
 
         scr.cur.vel = vec2f_mul(
             vec2f_sub(scr.cur.render_pos, scr.cur.actual_pos),
-            vec2fs(CURSOR_VELOCITY)
+            vec2fs(CUR_VEL)
         );
         scr.cur.render_pos = vec2f_sub(
             scr.cur.render_pos,
@@ -433,7 +447,6 @@ static_assert(EDITOR_KEY_COUNT == 19, "The number of editor keys has changed");
         );
 
         // Update camera position on the screen
-
         scr.cam.vel = vec2f_mul(
             vec2f_sub(scr.cur.render_pos, scr.cam.pos), 
             vec2fs(2.0f)
@@ -447,7 +460,7 @@ static_assert(EDITOR_KEY_COUNT == 19, "The number of editor keys has changed");
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        renderer_draw(&sr, &ftr, &e, &scr);
+        renderer_draw(window, &sr, &ftr, &e, &scr);
 
         const Uint32 duration = (SDL_GetTicks() - start);
         if (duration < DELTA_TIME_MS) {
@@ -456,6 +469,8 @@ static_assert(EDITOR_KEY_COUNT == 19, "The number of editor keys has changed");
 
         SDL_GL_SwapWindow(window);
     }
+
+    editor_clear(&e);
 
     return 0;
 }

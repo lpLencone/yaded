@@ -14,9 +14,12 @@ typedef struct {
     char *s;
 } Line;
 
-Line line_init(void);
+Line line_init(const char *s);
+void line_destroy(Line *line);
+void line_clear(Line *line);
 
-void line_insert_s(Line *line, const char *s, size_t at);
+void line_write(Line *line, const char *s, size_t at);
+void line_append(Line *line, const char *s);
 void line_delete_char(Line *line, size_t at);
 
 #endif // YADED_LINE_H_

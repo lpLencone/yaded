@@ -80,8 +80,6 @@ void sr_image_rect(
     Simple_Renderer *sr, 
     Vec2f p, Vec2f s, Vec2f uvp, Vec2f uvs);
 
-void sr_clear(Simple_Renderer *sr);
-void sr_sync(const Simple_Renderer *sr);
-void sr_draw(const Simple_Renderer *sr);
+void sr_flush(Simple_Renderer *sr);
 
 #endif // YADED_SIMPLE_RENDERER_H_

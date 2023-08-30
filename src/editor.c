@@ -3,6 +3,7 @@
 #include "editor.h"
 
 #include <assert.h>
+#include <dirent.h>
 #include <errno.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -10,92 +11,147 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 
 
 #define SV_IMPLEMENTATION
 #include "sv.h"
 
-// Line Operations
-static void remove_line(Editor *e);
-static void merge_line(Editor *e);
-
 // File I/O
-static void save_file(Editor *e);
-static void open_file(Editor *e);
+static void save_file(const Editor *e);
+static void open_file(Editor *e, const char *filename);
+static void open_dir(Editor *e, const char *dirname);
 
 // Editor Operations
 static void editor_delete_char(Editor *e);
-static void editor_edit(Editor *e, EditorKey key);
-static void editor_move(Editor *e, EditorKey key);
-static void editor_action(Editor *e, EditorKey key);
+static void editor_browsing(Editor *e, EditorKey key);
 
-Editor editor_init(const char *filename)
+const char *get_pathname_cstr(const List *pathname);
+static void update_pathname(List *pathname, const char *path);
+
+static void line_dealloc(void *line);
+static int line_compare(void *line1, void *line2);
+
+Editor editor_init(const char *pathname)
 {
-    Editor e;
-    e.cx = 0;
-    e.cy = 0;
-    e.filename = filename;
-    
-    e.lines = list_init();
-    Line line = line_init();
-    list_append(&e.lines, &line, sizeof(line));
+    Editor e = {0};
 
-    struct stat buffer;
+    e.pathname = list_init(NULL, NULL);
 
-    if (e.filename != NULL && stat(filename, &buffer) == 0) {
-        open_file(&e);
+    char cwdbuf[256];
+    getcwd(cwdbuf, sizeof(cwdbuf));
+    char *save_ptr;
+    char *path;
+    path = strtok_r(cwdbuf, "/", &save_ptr);
+    while (path != NULL) {
+        list_append(&e.pathname, path, strlen(path) + 1);
+        path = strtok_r(save_ptr, "/", &save_ptr);
     }
+    
+    e.lines = list_init(line_dealloc, line_compare);
+    e.mode = EDITOR_MODE_EDITING;
+
+    editor_open(&e, pathname);
 
     return e;
 }
 
+void editor_clear(Editor *e)
+{
+    e->cx = 0;
+    e->cy = 0;
+    e->mode = EDITOR_MODE_EDITING;
+
+    list_clear(&e->lines);
+}
+
 void editor_process_key(Editor *e, EditorKey key)
 {
-    switch (key) {
-        case EDITOR_LEFT:
-        case EDITOR_RIGHT:
-        case EDITOR_UP:
-        case EDITOR_DOWN:
-        case EDITOR_LEFTW:
-        case EDITOR_RIGHTW:
-        case EDITOR_LINE_HOME:
-        case EDITOR_LINE_END:
-        case EDITOR_HOME:
-        case EDITOR_END:
-        case EDITOR_PAGEUP:
-        case EDITOR_PAGEDOWN: {
-            editor_move(e, key);
+    switch (e->mode) {
+        case EDITOR_MODE_EDITING: {
+            switch (key) {
+                case EDITOR_KEY_LEFT:
+                case EDITOR_KEY_RIGHT:
+                case EDITOR_KEY_UP:
+                case EDITOR_KEY_DOWN:
+                case EDITOR_KEY_LEFTW:
+                case EDITOR_KEY_RIGHTW:
+                case EDITOR_KEY_LINE_HOME:
+                case EDITOR_KEY_LINE_END:
+                case EDITOR_KEY_HOME:
+                case EDITOR_KEY_END:
+                case EDITOR_KEY_PAGEUP:
+                case EDITOR_KEY_PAGEDOWN: {
+                    editor_move(e, key);
+                } break;
+
+                case EDITOR_KEY_BACKSPACE:
+                case EDITOR_KEY_DELETE:
+                case EDITOR_KEY_RETURN:
+                case EDITOR_KEY_LINE_BELOW:
+                case EDITOR_KEY_LINE_ABOVE:
+                case EDITOR_KEY_REMOVE_LINE:
+                case EDITOR_KEY_MERGE_LINE:
+                case EDITOR_KEY_BREAK_LINE:
+                case EDITOR_KEY_TAB: {
+                    editor_edit(e, key);
+                } break;
+
+                case EDITOR_KEY_SAVE:
+                case EDITOR_KEY_BROWSE: {
+                    editor_action(e, key);
+                } break;
+
+                default:
+                    assert(0);
+            }
         } break;
 
-        case EDITOR_BACKSPACE:
-        case EDITOR_DELETE:
-        case EDITOR_RETURN:
-        case EDITOR_LINE_BELOW:
-        case EDITOR_LINE_ABOVE:
-        case EDITOR_TAB: {
-            editor_edit(e, key);
+        case EDITOR_MODE_BROWSING: {
+            switch (key) {
+                case EDITOR_KEY_LEFT:
+                case EDITOR_KEY_RIGHT:
+                case EDITOR_KEY_UP:
+                case EDITOR_KEY_DOWN:
+                case EDITOR_KEY_PAGEUP:
+                case EDITOR_KEY_PAGEDOWN: 
+                case EDITOR_KEY_RETURN: {
+                    editor_browsing(e, key);
+                } break;
+
+                default:
+                    assert(0);
+            }
         } break;
 
-        case EDITOR_SAVE: {
-            editor_action(e, key);
+        case EDITOR_MODE_SELECTION: {
+            switch (key) {
+                default:
+                    assert(0);
+            }
         } break;
-
-        default:
-            assert(0);
     }
 }
 
-static_assert(EDITOR_KEY_COUNT == 19, "The number of editor keys has changed");
+static_assert(EDITOR_KEY_COUNT == 23, "The number of editor keys has changed");
 
-void editor_insert_s(Editor *e, const char *s)
+void editor_write(Editor *e, const char *s)
 {
-    Line *line = list_get(&e->lines, e->cy);
-
-    if (e->cx > line->size) {
-        e->cx = line->size;
+    if (e->mode == EDITOR_MODE_BROWSING) {
+        return;
     }
 
-    line_insert_s(line, s, e->cx);
+    if (e->cy == e->lines.length) {
+        Line line = line_init(s);
+        list_insert(&e->lines, &line, sizeof(line), e->cy);
+    } else {
+        Line *line = list_get(&e->lines, e->cy);
+        if (e->cx > line->size) {
+            e->cx = line->size;
+        }
+        line_write(line, s, e->cx);
+    }
+
     e->cx += strlen(s);
 }
 
@@ -108,7 +164,7 @@ size_t editor_get_line_size(const Editor *e)
 const char *editor_get_line_at(const Editor *e, size_t at)
 {
     const Line *line = list_get(&e->lines, at);
-    return (line == NULL) ? NULL: line->s;
+    return (line == NULL) ? NULL : line->s;
 }
 
 const char *editor_get_line(const Editor *e)
@@ -118,163 +174,153 @@ const char *editor_get_line(const Editor *e)
 
 /* Line operations */
 
-static void remove_line(Editor *e)
+void editor_remove_line_at(Editor *e, size_t at)
 {
-    if (e->cy == e->lines.length) {
-        return;
-    }
-    list_remove(&e->lines, e->cy);
-    editor_move(e, EDITOR_UP);
+    assert(at < e->lines.length);
+    list_remove(&e->lines, at);
 }
 
-static void merge_line(Editor *e)
+void editor_merge_line_at(Editor *e, size_t at)
 {
-    Line *line       = list_get(&e->lines, e->cy);
-    Line *line_after = list_get(&e->lines, e->cy + 1);
-    line_insert_s(line, line_after->s, line->size);
+    assert (at + 1 < e->lines.length);
 
-    editor_move(e, EDITOR_DOWN);
-    remove_line(e);
+    Line *line       = list_get(&e->lines, at);
+    Line *line_after = list_get(&e->lines, at + 1);
+    line_write(line, line_after->s, line->size);
+
+    editor_remove_line_at(e, at + 1);
 }
 
-void editor_break_line(Editor *e)
+void editor_break_line_at(Editor *e, size_t at)
 {
-    editor_new_line_at(e, e->cy + 1);
-    Line *line = list_get(&e->lines, e->cy);
-    Line *new_line = list_get(&e->lines, e->cy + 1);
-
-    line_insert_s(new_line, &line->s[e->cx], new_line->size);
+    Line *line = list_get(&e->lines, at);
+    Line new_line = line_init(&line->s[e->cx]);
+    list_insert(&e->lines, &new_line, sizeof(new_line), at + 1);
 
     while (e->cx < line->size) {
         line_delete_char(line, e->cx);
     }
-
-    editor_move(e, EDITOR_DOWN);
-    editor_move(e, EDITOR_LINE_HOME);
 }
 
-void editor_new_line(Editor *e)
-{
-    editor_new_line_at(e, e->cy);
-}
-
-void editor_new_line_at(Editor *e, size_t at)
+void editor_new_line_at(Editor *e, const char *s, size_t at)
 {   
-    Line line = line_init();
+    Line line = line_init(s);
     list_insert(&e->lines, &line, sizeof(line), at);
 }
 
 /* Editor Operations */
 
-static void editor_delete_char(Editor *e)
+void editor_delete_char(Editor *e)
 {
-    if (e->cx == 0 && e->cy == 0) {
+    if (e->cy + 1 >= e->lines.length &&
+        e->cx >= editor_get_line_size(e)) 
+    {
         return;
     }
 
-    editor_move(e, EDITOR_LEFT);
-
     Line *line = list_get(&e->lines, e->cy);
+
+    if (e->cx > line->size) e->cx = line->size;
     if (e->cx == line->size) {
-        merge_line(e);
+        editor_merge_line(e);
     } else {
         line_delete_char(line, e->cx);
     }
 }
 
-static void editor_move(Editor *e, EditorKey key)
+void editor_move(Editor *e, EditorKey key)
 {
     switch (key) {
-        case EDITOR_LEFT: {
+        case EDITOR_KEY_LEFT: {
             if (e->cx > 0) {
                 size_t line_size = editor_get_line_size(e);
                 if (e->cx > line_size) {
                     e->cx = line_size;
-                    editor_move(e, EDITOR_LEFT);
+                    editor_move(e, EDITOR_KEY_LEFT);
                 } else {
                     e->cx--;
                 }
             } else if (e->cy > 0) {
-                editor_move(e, EDITOR_UP);
-                editor_move(e, EDITOR_LINE_END);
+                editor_move(e, EDITOR_KEY_UP);
+                editor_move(e, EDITOR_KEY_LINE_END);
             }
         } break;
 
-        case EDITOR_RIGHT: {
+        case EDITOR_KEY_RIGHT: {
             if (e->cx < editor_get_line_size(e)) {
                 e->cx++;
             } else if (e->cy + 1 < e->lines.length) {
-                editor_move(e, EDITOR_DOWN);
-                editor_move(e, EDITOR_LINE_HOME);
+                editor_move(e, EDITOR_KEY_DOWN);
+                editor_move(e, EDITOR_KEY_LINE_HOME);
             }
         } break;
 
-        case EDITOR_UP: {
+        case EDITOR_KEY_UP: {
             if (e->cy > 0) {
                 e->cy--;
             }
         } break;
 
-        case EDITOR_DOWN: {
-            if (e->cy < e->lines.length - 1) {
+        case EDITOR_KEY_DOWN: {
+            if (e->cy + 1 < e->lines.length) {
                 e->cy++;
             }
         } break;
 
-        case EDITOR_LEFTW: {
-            editor_move(e, EDITOR_LEFT);
+        case EDITOR_KEY_LEFTW: {
+            editor_move(e, EDITOR_KEY_LEFT);
 
             const char *s = editor_get_line(e);
             while (s[e->cx] == ' ') {
                 s = editor_get_line(e);
-                editor_move(e, EDITOR_LEFT);
+                editor_move(e, EDITOR_KEY_LEFT);
             }
             while (s[e->cx] != ' ' && e->cx > 0) {
                 s = editor_get_line(e);
-                editor_move(e, EDITOR_LEFT);
+                editor_move(e, EDITOR_KEY_LEFT);
             }
             if (e->cx != 0) {
-                editor_move(e, EDITOR_RIGHT);
+                editor_move(e, EDITOR_KEY_RIGHT);
             }
         } break;
 
-        case EDITOR_RIGHTW: {
-            editor_move(e, EDITOR_RIGHT);
+        case EDITOR_KEY_RIGHTW: {
+            editor_move(e, EDITOR_KEY_RIGHT);
 
             const char *s = editor_get_line(e);
             while (s[e->cx] == ' ') {
                 s = editor_get_line(e);
-                editor_move(e, EDITOR_RIGHT);
+                editor_move(e, EDITOR_KEY_RIGHT);
             }
             while (s[e->cx] != ' ' && e->cx < strlen(s)) {
                 s = editor_get_line(e);
-                editor_move(e, EDITOR_RIGHT);
+                editor_move(e, EDITOR_KEY_RIGHT);
             }
         } break;
 
-        case EDITOR_LINE_HOME: {
+        case EDITOR_KEY_LINE_HOME: {
             e->cx = 0;
         } break;
 
-        case EDITOR_LINE_END: {
+        case EDITOR_KEY_LINE_END: {
             e->cx = editor_get_line_size(e);
         } break;
 
-        case EDITOR_HOME: {
+        case EDITOR_KEY_HOME: {
             e->cx = 0;
             e->cy = 0;
         } break;
 
-        case EDITOR_END: {
-            e->cy = e->lines.length - 1;
+        case EDITOR_KEY_END: {
+            e->cy = (e->lines.length > 0) ? e->lines.length - 1 : 0;
             e->cx = editor_get_line_size(e);
         } break;
 
-        case EDITOR_PAGEUP: {
+        case EDITOR_KEY_PAGEUP: {
             // TODO
         } break;
 
-        case EDITOR_PAGEDOWN: {
+        case EDITOR_KEY_PAGEDOWN: {
             // TODO
         } break;
 
@@ -283,37 +329,50 @@ static void editor_move(Editor *e, EditorKey key)
     }
 }
 
-static void editor_edit(Editor *e, EditorKey key)
+void editor_edit(Editor *e, EditorKey key)
 {
     switch (key) {
-        case EDITOR_BACKSPACE: {
+        case EDITOR_KEY_BACKSPACE: {
+            if (e->cx == 0 && e->cy == 0) return;
+            editor_move(e, EDITOR_KEY_LEFT);
             editor_delete_char(e);
         } break;
 
-        case EDITOR_DELETE: {
-            if (e->cy + 1 < e->lines.length ||
-                e->cx < editor_get_line_size(e)) 
-            {
-                editor_move(e, EDITOR_RIGHT);
-                editor_delete_char(e);
-            }
+        case EDITOR_KEY_DELETE: {
+            editor_delete_char(e);
         } break;
 
-        case EDITOR_RETURN: {
+        case EDITOR_KEY_RETURN: {
             editor_break_line(e);
+            editor_move(e, EDITOR_KEY_DOWN);
         } break;
 
-        case EDITOR_TAB: {
+        case EDITOR_KEY_TAB: {
             // TODO
         } break;
 
-        case EDITOR_LINE_BELOW: {
-            editor_new_line_at(e, e->cy + 1);
-            editor_move(e, EDITOR_DOWN);
+        case EDITOR_KEY_LINE_BELOW: {
+            editor_new_line_at(e, "", e->cy + 1);
+            editor_move(e, EDITOR_KEY_DOWN);
         } break;
 
-        case EDITOR_LINE_ABOVE: {
-            editor_new_line(e);
+        case EDITOR_KEY_LINE_ABOVE: {
+            editor_new_line(e, "");
+        } break;
+
+        case EDITOR_KEY_REMOVE_LINE: {
+            editor_remove_line(e);
+            editor_move(e, EDITOR_KEY_UP);
+        } break;
+
+        case EDITOR_KEY_MERGE_LINE: {
+            editor_merge_line(e);
+        } break;
+
+        case EDITOR_KEY_BREAK_LINE: {
+            editor_break_line(e);
+            editor_move(e, EDITOR_KEY_DOWN);
+            editor_move(e, EDITOR_KEY_LINE_HOME);
         } break;
 
         default:
@@ -321,10 +380,10 @@ static void editor_edit(Editor *e, EditorKey key)
     }
 }
 
-static void editor_action(Editor *e, EditorKey key)
+void editor_action(Editor *e, EditorKey key)
 {
     switch (key) {
-        case EDITOR_SAVE: {
+        case EDITOR_KEY_SAVE: {
             save_file(e);
         } break;
 
@@ -333,18 +392,73 @@ static void editor_action(Editor *e, EditorKey key)
     }
 }
 
-static_assert(EDITOR_KEY_COUNT == 19, "The number of editor keys has changed");
+static void editor_browsing(Editor *e, EditorKey key)
+{
+    switch (key) {
+        case EDITOR_KEY_LEFT:
+        case EDITOR_KEY_UP: {
+            editor_move(e, EDITOR_KEY_UP);
+        } break;
+            
+        case EDITOR_KEY_RIGHT:
+        case EDITOR_KEY_DOWN: {
+            editor_move(e, EDITOR_KEY_DOWN);
+        } break;
+
+        case EDITOR_KEY_PAGEUP: {
+            // TODO
+        } break;
+
+        case EDITOR_KEY_PAGEDOWN: {
+            // TODO
+        } break;
+
+        case EDITOR_KEY_RETURN: {
+            editor_open(e, editor_get_line(e));
+        } break;
+        
+        default:
+            assert(0);
+    }
+}
+
+static_assert(EDITOR_KEY_COUNT == 23, "The number of editor keys has changed");
 
 /* File I/O */
 
-static void save_file(Editor *e)
+void editor_open(Editor *e, const char *path)
 {
-    // TODO: change that shoot for a decent prompt
-    assert(e->filename != NULL);
+    assert(path != NULL);
 
-    FILE *file = fopen(e->filename, "w");
+    update_pathname(&e->pathname, path);
+    const char *pathname = get_pathname_cstr(&e->pathname);
+
+    errno = 0;
+    struct stat statbuf;
+    if (stat(pathname, &statbuf) != 0) {
+        if (errno == ENOENT) return; // File does not exist, it's fine
+        fprintf(stderr, "Could not get stat for \"%s\": %s", pathname, strerror(errno));
+        exit(1);
+    }
+
+    editor_clear(e);
+
+    mode_t mode = statbuf.st_mode & S_IFMT;
+    if (mode == S_IFDIR) { // Directory
+        open_dir(e, pathname);
+        e->mode = EDITOR_MODE_BROWSING;
+    } else if (mode == S_IFREG) { // Regular file
+        open_file(e, pathname);
+        e->mode = EDITOR_MODE_EDITING;
+    }
+}
+
+static void save_file(const Editor *e)
+{
+    const char *pathname = get_pathname_cstr(&e->pathname);
+    FILE *file = fopen(pathname, "w");
     if (file == NULL) {
-        fprintf(stderr, "Could not open file `%s`: %s\n", e->filename, strerror(errno));
+        fprintf(stderr, "Could not open file \"%s\": %s\n", pathname, strerror(errno));
         exit(1);
     }
 
@@ -356,54 +470,106 @@ static void save_file(Editor *e)
     fclose(file);
 }
 
-#define sv_c_str(c_chunk, sv_chunk)                         \
-    c_chunk = malloc(chunk_line.count + 1);                 \
-    memcpy(c_chunk, chunk_line.data, chunk_line.count);     \
-    c_chunk[chunk_line.count] = '\0';                       
+#define sv_c_str(c_chunk, sv_chunk)                     \
+    c_chunk = malloc(sv_chunk.count + 1);               \
+    memcpy(c_chunk, sv_chunk.data, sv_chunk.count);     \
+    c_chunk[sv_chunk.count] = '\0';                       
 
-static void open_file(Editor *e) 
-{   
-    FILE *file = fopen(e->filename, "r");
+static void open_file(Editor *e, const char *filename)
+{
+    FILE *file = fopen(filename, "r");
     if (file == NULL) {
-        fprintf(stderr, "Could not open file `%s`: %s\n", e->filename, strerror(errno));
+        fprintf(stderr, "Could not open file \"%s\": %s\n", filename, strerror(errno));
         exit(1);
     }
 
     static char chunk[64 * 1024];
-
     while (!feof(file)) {
         size_t n_bytes = fread(chunk, 1, sizeof(chunk), file);
-
-        String_View chunk_sv = {
+        String_View sv_chunk = {
             .data = chunk,
             .count = n_bytes
         };
-        
-        while (chunk_sv.count > 0) {
-            String_View chunk_line = {0};
+
+        while (sv_chunk.count > 0) {
+            String_View sv_line = {0};
             char *c_chunk;
             
-            if (sv_try_chop_by_delim(&chunk_sv, '\n', &chunk_line)) {
-                sv_c_str(c_chunk, chunk_line);
-
-                editor_insert_s(e, c_chunk);
-                editor_break_line(e);
+            if (sv_try_chop_by_delim(&sv_chunk, '\n', &sv_line)) {
+                sv_c_str(c_chunk, sv_line);
+                Line line = line_init(c_chunk);
+                list_append(&e->lines, &line, sizeof(line));
             } else {
-                sv_c_str(c_chunk, chunk_line);
-                
-                editor_insert_s(e, c_chunk);
-                chunk_sv = SV_NULL;
+                sv_c_str(c_chunk, sv_chunk);
+                Line line = line_init(c_chunk);
+                list_append(&e->lines, &line, sizeof(line));
+                sv_chunk = SV_NULL;
             }
-
             free(c_chunk);
         }
     }
-
-    e->cy = 0;
 }
 
+static void open_dir(Editor *e, const char *dirname)
+{
+    DIR *dirp = opendir(dirname);
+    if (dirp == NULL) {
+        fprintf(stderr, "Could not open dir \"%s\": %s\n", dirname, strerror(errno));
+        exit(1);
+    }
 
+    errno = 0;
+    struct dirent *direntry;
+    while ((direntry = readdir(dirp)) != NULL) {
+        Line line = line_init(direntry->d_name);
+        list_append(&e->lines, &line, sizeof(line));
+    }
 
+    if (errno) {
+        fprintf(stderr, "Could not read dir: \"%s\": %s\n", dirname, strerror(errno));
+        if (closedir(dirp) != 0) {
+            fprintf(stderr, "Could not close dir: \"%s\": %s\n", dirname, strerror(errno));
+        };
+        exit(1);
+    }
+
+    list_quicksort(&e->lines);
+}
+
+const char *get_pathname_cstr(const List *pathname)
+{
+    static char buffer[256] = {0};
+    char *buffer_ptr = buffer;
+    for (size_t i = 0; i < pathname->length; i++) {
+        *buffer_ptr++ = '/';
+        const char *path = (char *) list_get(pathname, i);
+        strcpy(buffer_ptr, path);
+        buffer_ptr += strlen(path);
+    }
+    return buffer;
+}
+
+static void update_pathname(List *pathname, const char *path)
+{
+    assert(pathname != NULL && path != NULL);
+    if (strcmp(path, "..") == 0) {
+        if (pathname->length > 0) {
+            list_remove(pathname, pathname->length - 1);
+        }
+    } else if (strcmp(path, ".") != 0) {
+        list_append(pathname, path, strlen(path) + 1);
+    }
+}
+
+static void line_dealloc(void *line)
+{
+    line_destroy((Line *) line);
+}
+
+static int line_compare(void *line1, void *line2)
+{
+    return strcmp(((Line *) line1)->s, ((Line *) line2)->s);
+}
 
 
 

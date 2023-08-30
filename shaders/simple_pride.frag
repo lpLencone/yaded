@@ -24,8 +24,10 @@ void main() {
 
     vec4 rainbow = vec4(
         hsl2rgb(
-            vec3(0.5 * time + frag_uv.x + frag_uv.y, 
-                 0.5, 0.5)
+            vec3(
+                0.5 * time + frag_uv.x * frag_uv.y * (sin(out_uv.x) + cos(out_uv.y)), 
+                0.5, 0.5
+            )
         ), 
         1.0
     );
