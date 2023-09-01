@@ -115,7 +115,9 @@ void editor_process_key(Editor *e, EditorKey key)
                 case EDITOR_KEY_DOWN:
                 case EDITOR_KEY_PAGEUP:
                 case EDITOR_KEY_PAGEDOWN: 
-                case EDITOR_KEY_RETURN: {
+                case EDITOR_KEY_RETURN:
+                case EDITOR_KEY_HOME:
+                case EDITOR_KEY_END: {
                     editor_browsing(e, key);
                 } break;
 
@@ -416,7 +418,17 @@ static void editor_browsing(Editor *e, EditorKey key)
         case EDITOR_KEY_RETURN: {
             editor_open(e, editor_get_line(e));
         } break;
-        
+
+        case EDITOR_KEY_HOME: {
+            e->cy = 0;
+        } break;
+
+        case EDITOR_KEY_END: {
+            if (e->lines.length > 0) {
+                e->cy = e->lines.length - 1;
+            }
+        } break;    
+
         default:
             assert(0);
     }
@@ -538,6 +550,10 @@ static void open_dir(Editor *e, const char *dirname)
 
 const char *get_pathname_cstr(const List *pathname)
 {
+    if (pathname->length == 0) {
+        return "/";
+    }
+
     static char buffer[256] = {0};
     char *buffer_ptr = buffer;
     for (size_t i = 0; i < pathname->length; i++) {
@@ -546,6 +562,7 @@ const char *get_pathname_cstr(const List *pathname)
         strcpy(buffer_ptr, path);
         buffer_ptr += strlen(path);
     }
+    printf("%s\n", buffer);
     return buffer;
 }
 
