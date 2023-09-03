@@ -42,6 +42,58 @@ Vec2i vec2i_div(Vec2i a, Vec2i b)
     return vec2i(a.x / b.x, a.y / b.y);
 }
 
+int vec2i_cmp_yx(Vec2i a, Vec2i b)
+{
+    int diff = a.y - b.y;
+    return diff ? diff : a.x - b.x;
+}
+
+/* 2-DIMENSIONAL UNSIGNED INT VECTOR */
+
+Vec2ui vec2ui(uint32_t x, uint32_t y)
+{
+    return (Vec2ui) {
+        .x = x,
+        .y = y,
+    };
+}
+
+Vec2ui vec2uis(uint32_t n)
+{
+    return vec2ui(n, n);
+}
+
+Vec2ui vec2ui_add(Vec2ui a, Vec2ui b)
+{
+    return vec2ui(a.x + b.x, a.y + b.y);
+}
+
+Vec2ui vec2ui_sub(Vec2ui a, Vec2ui b)
+{
+    return vec2ui(a.x - b.x, a.y - b.y);
+}
+
+Vec2ui vec2ui_mul(Vec2ui a, Vec2ui b)
+{
+    return vec2ui(a.x * b.x, a.y * b.y);
+}
+
+Vec2ui vec2ui_mul3(Vec2ui a, Vec2ui b, Vec2ui c)
+{
+    return vec2ui(a.x * b.x * c.x, a.y * b.y * c.y);
+}
+
+Vec2ui vec2ui_div(Vec2ui a, Vec2ui b)
+{
+    return vec2ui(a.x / b.x, a.y / b.y);
+}
+
+int vec2ui_cmp_yx(Vec2ui a, Vec2ui b)
+{
+    int diff = (int) a.y - (int) b.y;
+    return diff ? diff : (int) a.x - (int) b.x;
+}
+
 /* 2-DIMENSIONAL FLOAT VECTOR */
 
 Vec2f vec2f(float x, float y)
@@ -79,6 +131,12 @@ Vec2f vec2f_mul3(Vec2f a, Vec2f b, Vec2f c)
 Vec2f vec2f_div(Vec2f a, Vec2f b)
 {
     return vec2f(a.x / b.x, a.y / b.y);
+}
+
+int vec2f_cmp_yx(Vec2f a, Vec2f b)
+{
+    int diff = a.y - b.y;
+    return diff ? diff : a.x - b.x;
 }
 
 bool vec2f_eq(Vec2f a, Vec2f b)

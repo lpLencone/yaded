@@ -17,6 +17,7 @@
 #define FONT_SIZE                   64
     
 #define FONT_FILENAME               "fonts/VictorMono-Regular.ttf"
+// #define FONT_FILENAME               "fonts/TSCu_Comic.ttf"
 
 #define CUR_INIT_WIDTH              5.0f
 #define CUR_VEL                     20.0f
@@ -45,6 +46,10 @@ typedef struct {
         Vec2f render_pos;
         float actual_width;
         float render_width;
+        
+        Vec2f selection_pos;
+        float selection_width;
+        
         float height;
         size_t last_cx;
         size_t last_cy;
@@ -129,9 +134,7 @@ void init_glew(void)
 }
 
 const int keymap[] = {
-    0, 0,
-    SDLK_UP,
-    SDLK_DOWN,
+    0, 0, 0, 0,
     0, 0, 0, 0, 0, 0,
     SDLK_PAGEUP,
     SDLK_PAGEDOWN,
@@ -143,20 +146,20 @@ const int keymap[] = {
 const size_t keymap_size = sizeof(keymap) / sizeof(keymap[0]);
 
 EditorKey find_move_key(int code) {
-    for (EditorKey ek = EDITOR_KEY_LEFT; ek <= EDITOR_KEY_PAGEDOWN; ek++) {
+    for (EditorKey ek = EK_LEFT; ek <= EK_PAGEDOWN; ek++) {
         if (keymap[ek] == code) return ek;
     }
     assert(0);
 }
 
 EditorKey find_edit_key(int code) {
-    for (EditorKey ek = EDITOR_KEY_BACKSPACE; ek <= EDITOR_KEY_TAB; ek++) {
+    for (EditorKey ek = EK_BACKSPACE; ek <= EK_TAB; ek++) {
         if (keymap[ek] == code) return ek;
     }
     assert(0);
 }
 
-static_assert(EDITOR_KEY_COUNT == 23, "The number of editor keys has changed");
+static_assert(EK_COUNT == 30, "The number of editor keys has changed");
 
 FT_Face FT_init(void)
 {
@@ -194,7 +197,8 @@ void renderers_init(Simple_Renderer *sr, FreeType_Renderer *ftr, FT_Face face)
     glUniform2f(sr->resolution, SCREEN_WIDTH, SCREEN_HEIGHT);
     sr_set_shader(sr, SHADER_PRIDE);
     glUniform2f(sr->resolution, SCREEN_WIDTH, SCREEN_HEIGHT);
-static_assert(SHADER_COUNT == 3, 
+    
+    static_assert(SHADER_COUNT == 3, 
               "The number of shaders has changed; update resolution for the new shaders");
 }
 
@@ -237,29 +241,76 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
     glUniform2f(sr->scale, scr->cam.scale, scr->cam.scale);
     glUniform2f(sr->resolution, w, h);
 
-    if (e->mode == EDITOR_MODE_EDITING) {
-        scr->cur.actual_width = CUR_INIT_WIDTH;
-        Uint32 CURSOR_BLINK_THRESHOLD = 500;
-        Uint32 CURSOR_BLINK_PERIOD    = 500;
-        Uint32 t = SDL_GetTicks() - scr->cur.last_moved;
-        if (t < CURSOR_BLINK_THRESHOLD || (t / CURSOR_BLINK_PERIOD) % 2 != 0) {
-            sr_solid_rect(
-                sr, vec2f(scr->cur.render_pos.x, -scr->cur.render_pos.y),
-                    vec2f(scr->cur.actual_width, scr->cur.height),
-                    vec4fs(1.0));
-        }
-    } else if (e->mode == EDITOR_MODE_BROWSING) {
-        const char *s = editor_get_line(e);
-        const size_t slen = strlen(s);
-        scr->cur.actual_width = ftr_get_s_width_n(ftr, s, slen);
-        scr->cur.render_width += 
-            (scr->cur.actual_width - scr->cur.render_width) * 10 * DELTA_TIME;
+    switch (e->mode) {
+        case EM_EDITING:
+        case EM_SELECTION: {
+            scr->cur.actual_width = CUR_INIT_WIDTH;
+            Uint32 CURSOR_BLINK_THRESHOLD = 500;
+            Uint32 CURSOR_BLINK_PERIOD    = 500;
+            Uint32 t = SDL_GetTicks() - scr->cur.last_moved;
+            if (t < CURSOR_BLINK_THRESHOLD || (t / CURSOR_BLINK_PERIOD) % 2 != 0) {
+                sr_solid_rect(
+                    sr, vec2f(scr->cur.render_pos.x, -scr->cur.render_pos.y),
+                        vec2f(scr->cur.actual_width, scr->cur.height),
+                        vec4fs(1.0));
+            }
 
-        sr_solid_rect(
-            sr, vec2f(scr->cur.render_pos.x - scr->cur.render_width / 2, -scr->cur.render_pos.y),
-                vec2f(scr->cur.render_width, scr->cur.height),
-                vec4fs(0.5f)
-        );
+            if (e->mode == EM_SELECTION) {
+                Vec2ui csbegin = e->c;  // Cursor select begin
+                Vec2ui csend = e->cs;   // Cursor select end
+                
+                if (vec2ui_cmp_yx(e->c, e->cs) > 0) {
+                    Vec2ui temp = csbegin;
+                    csbegin = csend;
+                    csend = temp;
+                }
+                
+                for (uint32_t cy = csbegin.y; cy <= csend.y; cy++) {
+                    scr->cur.selection_pos.x = 0;
+
+                    const char *s = editor_get_line_at(e, cy);
+                    size_t slen = strlen(s);
+
+                    size_t line_cx_begin = 0;
+                    size_t line_cx_end = slen;
+                    if (cy == csbegin.y) {
+                        line_cx_begin = (csbegin.x < slen) ? csbegin.x : slen;
+                    }
+                    if (cy == csend.y) {
+                        line_cx_end = (csend.x < slen) ? csend.x : slen;
+                    } else {
+                        line_cx_end++; // Select one more character, as though it was a `\n`
+                    }
+
+                    scr->cur.selection_width = 
+                        ftr_get_s_width_n_pad(ftr, &s[line_cx_begin], line_cx_end - line_cx_begin, ' ');
+
+                    scr->cur.selection_pos.x = ftr_get_s_width_n(ftr, s, line_cx_begin);
+                    sr_solid_rect(
+                        sr, vec2f(scr->cur.selection_pos.x, - (int) cy * FONT_SIZE),
+                            vec2f(scr->cur.selection_width, scr->cur.height),
+                            vec4fs(0.5f)
+                    );
+                }
+            }
+        } break;
+
+        case EM_BROWSING: {
+            const char *s = editor_get_line(e);
+            const size_t slen = strlen(s);
+            scr->cur.actual_width = ftr_get_s_width_n(ftr, s, slen);
+            scr->cur.render_width += 
+                (scr->cur.actual_width - scr->cur.render_width) * 10 * DELTA_TIME;
+
+            sr_solid_rect(
+                sr, vec2f(scr->cur.render_pos.x - scr->cur.render_width / 2, -scr->cur.render_pos.y),
+                    vec2f(scr->cur.render_width, scr->cur.height),
+                    vec4fs(0.5f)
+            );
+        } break;
+
+        default:
+            assert(0);
     }
 
     sr_flush(sr);
@@ -331,49 +382,55 @@ int main(int argc, char *argv[])
 
                 case SDL_KEYDOWN: {
                     switch (event.key.keysym.sym) {
-                        case SDLK_q: {
+                        case SDLK_w: {
                             if (SDL_CTRL) {
                                 quit = true;
                             }
                         } break;
 
-                        case SDLK_UP:
-                        case SDLK_DOWN:
                         case SDLK_PAGEUP:
                         case SDLK_PAGEDOWN: {
                             editor_process_key(&e, find_move_key(event.key.keysym.sym));
                             update_last_moved(&scr);
                         } break;
 
-                        case SDLK_LEFT: {
-                            if (SDL_CTRL) {
-                                editor_process_key(&e, EDITOR_KEY_LEFTW);
+                        case SDLK_UP: {
+                            if (SDL_SHIFT) {
+                                editor_process_key(&e, EK_SELECT_UP);
                             } else {
-                                editor_process_key(&e, EDITOR_KEY_LEFT);
+                                editor_process_key(&e, EK_UP);
+                            }
+                        } break;
+
+                        case SDLK_DOWN: {
+                            if (SDL_SHIFT) {
+                                editor_process_key(&e, EK_SELECT_DOWN);
+                            } else {
+                                editor_process_key(&e, EK_DOWN);
                             }
                         } break;
 
                         case SDLK_RIGHT: {
-                            if (SDL_CTRL) {
-                                editor_process_key(&e, EDITOR_KEY_RIGHTW);
+                            if (SDL_CTRL && SDL_SHIFT) {
+                                editor_process_key(&e, EK_SELECT_RIGHTW);
+                            } else if (SDL_CTRL) {
+                                editor_process_key(&e, EK_RIGHTW);
+                            } else if (SDL_SHIFT) {
+                                editor_process_key(&e, EK_SELECT_RIGHT);
                             } else {
-                                editor_process_key(&e, EDITOR_KEY_RIGHT);
+                                editor_process_key(&e, EK_RIGHT);
                             }
                         } break;
 
-                        case SDLK_HOME: {
-                            if (SDL_CTRL) {
-                                editor_process_key(&e, EDITOR_KEY_HOME);
+                        case SDLK_LEFT: {
+                            if (SDL_CTRL && SDL_SHIFT) {
+                                editor_process_key(&e, EK_SELECT_LEFTW);
+                            } else if (SDL_CTRL) {
+                                editor_process_key(&e, EK_LEFTW);
+                            } else if (SDL_SHIFT) {
+                                editor_process_key(&e, EK_SELECT_LEFT);
                             } else {
-                                editor_process_key(&e, EDITOR_KEY_LINE_HOME);
-                            }
-                        } break;
-
-                        case SDLK_END: {
-                            if (SDL_CTRL) {
-                                editor_process_key(&e, EDITOR_KEY_END);
-                            } else {
-                                editor_process_key(&e, EDITOR_KEY_LINE_END);
+                                editor_process_key(&e, EK_LEFT);
                             }
                         } break;
 
@@ -386,17 +443,17 @@ int main(int argc, char *argv[])
 
                         case SDLK_RETURN: {
                             if (SDL_CTRL) {
-                                editor_process_key(&e, EDITOR_KEY_LINE_BELOW);
+                                editor_process_key(&e, EK_LINE_BELOW);
                             } else if (SDL_SHIFT) {
-                                editor_process_key(&e, EDITOR_KEY_LINE_ABOVE);
+                                editor_process_key(&e, EK_LINE_ABOVE);
                             } else {
-                                editor_process_key(&e, EDITOR_KEY_RETURN);
+                                editor_process_key(&e, EK_RETURN);
                             }
                         } break;
 
                         case SDLK_s: {
                             if (SDL_CTRL) {
-                                editor_process_key(&e, EDITOR_KEY_SAVE);
+                                editor_process_key(&e, EK_SAVE);
                             }
                         } break;
 
@@ -405,8 +462,14 @@ int main(int argc, char *argv[])
                                 editor_open(&e, "..");
                             }
                         } break;
+
+                        case SDLK_a: {
+                            if (SDL_CTRL) {
+                                editor_process_key(&e, EK_SELECT_ALL);
+                            }
+                        }
                     }
-    static_assert(EDITOR_KEY_COUNT == 23, "The number of editor keys has changed");
+    static_assert(EK_COUNT == 30, "The number of editor keys has changed");
                 } break;
 
                 case SDL_TEXTINPUT: {
@@ -417,24 +480,24 @@ int main(int argc, char *argv[])
         }
 
         // Update Cursor
-        if (e.cy != scr.cur.last_cy) {
+        if (e.c.y != scr.cur.last_cy) {
             const char *s = (scr.cur.last_cy < e.lines.length) 
                 ? editor_get_line_at(&e, scr.cur.last_cy) 
                 : NULL;
                 
-            const float last_width = (s != NULL) ? ftr_get_s_width_n(&ftr, s, e.cx) : 0;
+            const float last_width = (s != NULL) ? ftr_get_s_width_n(&ftr, s, e.c.x) : 0;
             size_t ecx = ftr_get_glyph_index_near(&ftr, editor_get_line(&e), last_width);
-            cursor_move(&scr, ecx, e.cy);
+            cursor_move(&scr, ecx, e.c.y);
         }
-        if (e.cx != scr.cur.last_cx) {
-            cursor_move(&scr, e.cx, e.cy);
+        if (e.c.x != scr.cur.last_cx) {
+            cursor_move(&scr, e.c.x, e.c.y);
         }
 
         // Update cursor position on the screen
-        scr.cur.actual_pos.y = e.cy * FONT_SIZE;
+        scr.cur.actual_pos.y = e.c.y * FONT_SIZE;
         size_t n = editor_get_line_size(&e);
-        scr.cur.actual_pos.x = (e.mode == EDITOR_MODE_EDITING) 
-            ? ftr_get_s_width_n(&ftr, editor_get_line(&e), (e.cx > n) ? n : e.cx)
+        scr.cur.actual_pos.x = (e.mode != EM_BROWSING) 
+            ? ftr_get_s_width_n(&ftr, editor_get_line(&e), (e.c.x > n) ? n : e.c.x)
             : ftr_get_s_width_n(&ftr, editor_get_line(&e), n) / 2;
 
         scr.cur.vel = vec2f_mul(
