@@ -163,6 +163,9 @@ void editor_write(Editor *e, const char *s)
     if (e->mode == EM_BROWSING) {
         return;
     }
+    if (e->mode == EM_SELECTION) {
+        editor_delete_selection(e);
+    }
 
     if (e->c.y == e->lines.length) {
         Line line = line_init(s);
