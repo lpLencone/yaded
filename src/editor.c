@@ -165,6 +165,7 @@ void editor_write(Editor *e, const char *s)
     }
     if (e->mode == EM_SELECTION) {
         editor_delete_selection(e);
+        e->mode = EM_EDITING;
     }
 
     if (e->c.y == e->lines.length) {
