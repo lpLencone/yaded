@@ -11,41 +11,45 @@ Line line_init_n(const char *s, size_t n)
     assert(s != NULL);
 
     Line line;
-    da_init(&line, s, n + 1);
-    line.data[n] = '\0';
-
+    line.size = n;
+    line.capacity = line.size + 1;
+    line.s = strndup(s, n);
+    line.s[n] = '\0';
+    
     return line;
 }
 
 void line_destroy(Line *line)
 {
-    da_end(line);
+    assert(line != NULL && line->s != NULL);
+
+    free(line->s);
+    line->s = NULL;
 }
 
 void line_clear(Line *line)
 {
-    da_clear(line);
+    assert(line != NULL && line->s != NULL);
+
+    line->s[0] = '\0';
+    line->size = 0;
+    line->capacity = 1;
 }
 
 void line_write_n(Line *line, const char *s, size_t n, size_t at)
 {
-#if 0
     assert(at <= line->size);
 
     while (line->capacity < line->size + n + 1) {
-        line->data = realloc(line->data, line->capacity * 2);
+        line->s = realloc(line->s, line->capacity * 2);
         line->capacity *= 2;
     }
 
-    memmove(line->data + at + n, line->data + at, line->size - at);
-    memcpy(line->data + at, s, n);
+    memmove(line->s + at + n, line->s + at, line->size - at);
+    memcpy(line->s + at, s, n);
     
     line->size += n;
-    printf("%zu\n", line->size);
-    line->data[line->size] = '\0';
-#else
-    da_insert_n(line, s, n, at);
-#endif
+    line->s[line->size] = '\0';
 }
 
 void line_append_n(Line *line, const char *s, size_t n)
@@ -61,11 +65,11 @@ void line_delete_char(Line *line, size_t at)
         return;
     }
 
-    memmove(line->data + at, line->data + at + 1, line->size + 1 - at);
+    memmove(line->s + at, line->s + at + 1, line->size + 1 - at);
     line->size--;
 
     if (line->size + 1 < line->capacity / 2) {
-        line->data = realloc(line->data, line->capacity / 2);
+        line->s = realloc(line->s, line->capacity / 2);
         line->capacity /= 2;
     }
 }
