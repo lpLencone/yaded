@@ -6,7 +6,7 @@
 #include "la.h"
 
 #define line_debug debug_print printf("line size: %ld\n", editor_get_line_size(e));
-#define editor_debug debug_print printf("(%ld, %ld)\n", e->cx, e->cy);
+#define editor_debug debug_print printf("(%u, %u)\n", e->c.x, e->c.y);
 
 typedef enum {
     EK_LEFT,
@@ -32,15 +32,20 @@ typedef enum {
     EK_REMOVE_LINE,
     EK_MERGE_LINE,
     EK_BREAK_LINE,
-    EK_SAVE,
-    EK_BROWSE,
     EK_SELECT_LEFT,
     EK_SELECT_LEFTW,
     EK_SELECT_RIGHT,
     EK_SELECT_RIGHTW,
     EK_SELECT_UP,
     EK_SELECT_DOWN,
+    EK_SELECT_LINE_HOME,
+    EK_SELECT_LINE_END,
+    EK_SELECT_HOME,
+    EK_SELECT_END,
     EK_SELECT_ALL,
+    EK_SAVE,
+    EK_COPY,
+    EK_PASTE,
     EK_COUNT,
 } EditorKey;
 
@@ -55,6 +60,8 @@ typedef struct {
     List lines;
     Vec2ui c; // Cursor
     Vec2ui cs; // Selection cursor
+
+    char *clipboard;
 
     EditorMode mode;
     List pathname;
@@ -79,6 +86,7 @@ void editor_break_line_at(Editor *e, size_t at);
 size_t editor_get_line_size(const Editor *e);
 const char *editor_get_line(const Editor *e);
 const char *editor_get_line_at(const Editor *e, size_t at);
+char *editor_retrieve_selection(const Editor *e);
 
 void editor_open(Editor *e, const char *pathname);
 

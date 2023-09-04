@@ -1,6 +1,7 @@
 #define _DEFAULT_SOURCE
 
 #include "editor.h"
+#include "ds/dynamic_array.h"
 
 #include <assert.h>
 #include <dirent.h>
@@ -13,9 +14,13 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-
 #define SV_IMPLEMENTATION
 #include "sv.h"
+
+#define sv_c_str(c_chunk, sv_chunk)                     \
+    c_chunk = malloc(sv_chunk.count + 1);               \
+    memcpy(c_chunk, sv_chunk.data, sv_chunk.count);     \
+    c_chunk[sv_chunk.count] = '\0';                
 
 // File I/O
 static void save_file(const Editor *e);
@@ -30,6 +35,8 @@ static void editor_edit(Editor *e, EditorKey key);
 static void editor_action(Editor *e, EditorKey key);
 static void editor_select(Editor *e, EditorKey key);
 static void editor_delete_selection(Editor *e);
+static void editor_copy_selection(Editor *e);
+static void editor_paste(Editor *e);
 
 const char *get_pathname_cstr(const List *pathname);
 static void update_pathname(List *pathname, const char *path);
@@ -42,6 +49,7 @@ Editor editor_init(const char *pathname)
     Editor e = {0};
 
     e.pathname = list_init(NULL, NULL);
+    e.clipboard = NULL;
 
     char cwdbuf[256];
     getcwd(cwdbuf, sizeof(cwdbuf));
@@ -69,6 +77,8 @@ void editor_clear(Editor *e)
 
     list_clear(&e->lines);
 }
+
+static_assert(sizeof(Editor) == 96, "Editor structure has changed");
 
 void editor_process_key(Editor *e, EditorKey key)
 {
@@ -113,7 +123,8 @@ void editor_process_key(Editor *e, EditorKey key)
                 } break;
 
                 case EK_SAVE:
-                case EK_BROWSE: {
+                case EK_COPY:
+                case EK_PASTE: {
                     editor_action(e, key);
                 } break;
 
@@ -123,6 +134,10 @@ void editor_process_key(Editor *e, EditorKey key)
                 case EK_SELECT_DOWN: 
                 case EK_SELECT_LEFTW: 
                 case EK_SELECT_RIGHTW:
+                case EK_SELECT_LINE_HOME:
+                case EK_SELECT_LINE_END:
+                case EK_SELECT_HOME:
+                case EK_SELECT_END:
                 case EK_SELECT_ALL: {
                     if (e->mode != EM_SELECTION) {
                         e->cs = e->c;
@@ -156,7 +171,7 @@ void editor_process_key(Editor *e, EditorKey key)
     }
 }
 
-static_assert(EK_COUNT == 30, "The number of editor keys has changed");
+static_assert(EK_COUNT == 35, "The number of editor keys has changed");
 
 void editor_write(Editor *e, const char *s)
 {
@@ -168,18 +183,34 @@ void editor_write(Editor *e, const char *s)
         e->mode = EM_EDITING;
     }
 
-    if (e->c.y == e->lines.length) {
-        Line line = line_init(s);
-        list_insert(&e->lines, &line, sizeof(line), e->c.y);
-    } else {
-        Line *line = list_get(&e->lines, e->c.y);
-        if (e->c.x > line->size) {
-            e->c.x = line->size;
-        }
-        line_write(line, s, e->c.x);
-    }
+    String_View sv_chunk = sv_from_parts(s, strlen(s));
+    while (sv_chunk.count > 0) {
+        String_View sv_line = {0};
+        char *cstr;
 
-    e->c.x += strlen(s);
+        if (sv_try_chop_by_delim(&sv_chunk, '\n', &sv_line)) {
+            sv_c_str(cstr, sv_line);
+        } else {
+            sv_c_str(cstr, sv_chunk);
+            sv_chunk = SV_NULL;
+        }
+
+        if (e->c.y == e->lines.length) {
+            Line line = line_init_n(cstr, strlen(cstr));
+            list_insert(&e->lines, &line, sizeof(line), e->c.y);
+        } else {
+            Line *line = list_get(&e->lines, e->c.y);
+            if (e->c.x > line->size) {
+                e->c.x = line->size;
+            }
+            line_write_n(line, cstr, strlen(cstr), e->c.x);
+        }
+        e->c.x += strlen(cstr);
+
+        if (sv_chunk.data != NULL) {
+            editor_edit(e, EK_BREAK_LINE);
+        }
+    }
 }
 
 size_t editor_get_line_size(const Editor *e)
@@ -197,6 +228,48 @@ const char *editor_get_line_at(const Editor *e, size_t at)
 const char *editor_get_line(const Editor *e)
 {
     return editor_get_line_at(e, e->c.y);
+}
+
+char *editor_retrieve_selection(const Editor *e)
+{
+    assert(e->mode == EM_SELECTION);
+
+    Vec2ui csbegin = e->c;
+    Vec2ui csend = e->cs;
+    if (vec2ui_cmp_yx(e->c, e->cs) > 0) {
+        Vec2ui temp = csbegin;
+        csbegin = csend;
+        csend = temp;
+    }
+
+    da_create(selectbuf, char);
+
+    for (int cy = csbegin.y; cy <= (int) csend.y; cy++) {
+        const char *s = editor_get_line_at(e, cy);
+        size_t slen = strlen(s);
+
+        size_t line_cx_begin = 0;
+        size_t line_cx_end = slen;
+        if (cy == (int) csbegin.y) {
+            line_cx_begin = (csbegin.x < slen) ? csbegin.x : slen;
+        }
+        if (cy == (int) csend.y) {
+            line_cx_end = (csend.x < slen) ? csend.x : slen;
+        }
+
+        da_append_n(&selectbuf, &s[line_cx_begin], line_cx_end - line_cx_begin);
+        if (cy != (int) csend.y) {
+            da_append(&selectbuf, "\n");
+        }
+    }
+
+    selectbuf.data[selectbuf.size] = '\0';
+
+    char *s;
+    da_get_copy(&selectbuf, s);
+    da_end(&selectbuf);
+
+    return s;
 }
 
 /* Line operations */
@@ -218,8 +291,10 @@ void editor_merge_line_at(Editor *e, size_t at)
     editor_remove_line_at(e, at + 1);
 }
 
-void editor_break_line_at(Editor *e, size_t at)
+void editor_break_line_at(Editor *e, size_t at) // todo change size_t to vec2ui
 {
+    assert(at < e->lines.length);
+
     Line *line = list_get(&e->lines, at);
     Line new_line = line_init(&line->s[e->c.x]);
     list_insert(&e->lines, &new_line, sizeof(new_line), at + 1);
@@ -230,7 +305,7 @@ void editor_break_line_at(Editor *e, size_t at)
 }
 
 void editor_new_line_at(Editor *e, const char *s, size_t at)
-{   
+{
     Line line = line_init(s);
     list_insert(&e->lines, &line, sizeof(line), at);
 }
@@ -433,6 +508,14 @@ static void editor_action(Editor *e, EditorKey key)
             save_file(e);
         } break;
 
+        case EK_COPY: {
+            editor_copy_selection(e);
+        } break;
+
+        case EK_PASTE: {
+            editor_paste(e);
+        } break;
+
         default:
             assert(0);
     }
@@ -505,6 +588,22 @@ static void editor_select(Editor *e, EditorKey key)
             editor_move(e, EK_RIGHTW);
         } break;
 
+        case EK_SELECT_LINE_HOME: {
+            editor_move(e, EK_LINE_HOME);
+        } break;
+
+        case EK_SELECT_LINE_END: {
+            editor_move(e, EK_LINE_END);
+        } break;
+
+        case EK_SELECT_HOME: {
+            editor_move(e, EK_HOME);
+        } break;
+
+        case EK_SELECT_END: {
+            editor_move(e, EK_END);
+        } break;
+
         case EK_SELECT_ALL: {
             e->cs = vec2uis(0);
             editor_move(e, EK_END);
@@ -515,13 +614,14 @@ static void editor_select(Editor *e, EditorKey key)
     }
 }
 
+static_assert(EK_COUNT == 35, "The number of editor keys has changed");
+
 static void editor_delete_selection(Editor *e)
 {
     assert(e->mode == EM_SELECTION);
 
     Vec2ui csbegin = e->c;
     Vec2ui csend = e->cs;
-    
     if (vec2ui_cmp_yx(e->c, e->cs) > 0) {
         Vec2ui temp = csbegin;
         csbegin = csend;
@@ -555,7 +655,20 @@ static void editor_delete_selection(Editor *e)
     }
 }
 
-static_assert(EK_COUNT == 30, "The number of editor keys has changed");
+static void editor_copy_selection(Editor *e)
+{
+    if (e->clipboard != NULL) {
+        free(e->clipboard);
+        e->clipboard = NULL;
+    }
+    e->clipboard = editor_retrieve_selection(e);
+}
+
+static void editor_paste(Editor *e)
+{
+    editor_write(e, e->clipboard);
+}
+
 
 /* File I/O */
 
@@ -601,12 +714,7 @@ static void save_file(const Editor *e)
         fputc('\n', file);
     }
     fclose(file);
-}
-
-#define sv_c_str(c_chunk, sv_chunk)                     \
-    c_chunk = malloc(sv_chunk.count + 1);               \
-    memcpy(c_chunk, sv_chunk.data, sv_chunk.count);     \
-    c_chunk[sv_chunk.count] = '\0';                       
+}       
 
 static void open_file(Editor *e, const char *filename)
 {
@@ -683,7 +791,6 @@ const char *get_pathname_cstr(const List *pathname)
         strcpy(buffer_ptr, path);
         buffer_ptr += strlen(path);
     }
-    printf("%s\n", buffer);
     return buffer;
 }
 

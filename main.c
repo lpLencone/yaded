@@ -159,7 +159,7 @@ EditorKey find_edit_key(int code) {
     assert(0);
 }
 
-static_assert(EK_COUNT == 30, "The number of editor keys has changed");
+static_assert(EK_COUNT == 35, "The number of editor keys has changed");
 
 FT_Face FT_init(void)
 {
@@ -400,6 +400,7 @@ int main(int argc, char *argv[])
                             } else {
                                 editor_process_key(&e, EK_UP);
                             }
+                            update_last_moved(&scr);
                         } break;
 
                         case SDLK_DOWN: {
@@ -408,6 +409,7 @@ int main(int argc, char *argv[])
                             } else {
                                 editor_process_key(&e, EK_DOWN);
                             }
+                            update_last_moved(&scr);
                         } break;
 
                         case SDLK_RIGHT: {
@@ -420,18 +422,46 @@ int main(int argc, char *argv[])
                             } else {
                                 editor_process_key(&e, EK_RIGHT);
                             }
+                            update_last_moved(&scr);
                         } break;
 
                         case SDLK_LEFT: {
                             if (SDL_CTRL && SDL_SHIFT) {
                                 editor_process_key(&e, EK_SELECT_LEFTW);
-                            } else if (SDL_CTRL) {
-                                editor_process_key(&e, EK_LEFTW);
                             } else if (SDL_SHIFT) {
                                 editor_process_key(&e, EK_SELECT_LEFT);
+                            } else if (SDL_CTRL) {
+                                editor_process_key(&e, EK_LEFTW);
                             } else {
                                 editor_process_key(&e, EK_LEFT);
                             }
+                            update_last_moved(&scr);
+                        } break;
+
+                        case SDLK_HOME: {
+                            if (SDL_CTRL && SDL_SHIFT) {
+                                editor_process_key(&e, EK_SELECT_HOME);
+                            } else if (SDL_SHIFT) {
+                                editor_process_key(&e, EK_SELECT_LINE_HOME);
+                            } else if (SDL_CTRL) {
+                                editor_process_key(&e, EK_HOME);
+                            } else {
+                                editor_process_key(&e, EK_LINE_HOME);
+                            }
+                            update_last_moved(&scr);
+                        } break;
+
+                        case SDLK_END: {
+                            if (SDL_CTRL && SDL_SHIFT) {
+                                editor_process_key(&e, EK_SELECT_END);
+                            } else if (SDL_SHIFT) {
+                                editor_process_key(&e, EK_SELECT_LINE_END);
+                            } else if (SDL_CTRL) {
+                                editor_process_key(&e, EK_END);
+                            } else {
+                                editor_process_key(&e, EK_LINE_END);
+                            }
+                            update_last_moved(&scr);
                         } break;
 
                         case SDLK_BACKSPACE:
@@ -449,6 +479,7 @@ int main(int argc, char *argv[])
                             } else {
                                 editor_process_key(&e, EK_RETURN);
                             }
+                            update_last_moved(&scr);
                         } break;
 
                         case SDLK_s: {
@@ -467,9 +498,29 @@ int main(int argc, char *argv[])
                             if (SDL_CTRL) {
                                 editor_process_key(&e, EK_SELECT_ALL);
                             }
-                        }
+                            update_last_moved(&scr);
+                        } break;
+
+                        case SDLK_c: {
+                            if (SDL_CTRL && e.mode == EM_SELECTION) {
+                                SDL_SetClipboardText(editor_retrieve_selection(&e));
+                                editor_process_key(&e, EK_COPY);
+                            }
+                        } break;
+
+                        case SDLK_v: {
+                            if (e.clipboard == NULL || (SDL_HasClipboardText() && 
+                                                        strcmp(e.clipboard, SDL_GetClipboardText()) != 0))
+                            {
+                                e.clipboard = SDL_GetClipboardText();
+                            }
+                            if (SDL_CTRL && e.clipboard != NULL) {
+                                editor_process_key(&e, EK_PASTE);
+                            }
+                            update_last_moved(&scr);
+                        } break;
                     }
-    static_assert(EK_COUNT == 30, "The number of editor keys has changed");
+    static_assert(EK_COUNT == 35, "The number of editor keys has changed");
                 } break;
 
                 case SDL_TEXTINPUT: {
