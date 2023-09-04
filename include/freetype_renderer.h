@@ -34,12 +34,11 @@ typedef struct {
 
 void ftr_init(FreeType_Renderer *ftr, FT_Face face);
 
+#define ftr_render_s(ftr, sr, s, pos, c) \
+    ftr_render_s_n(ftr, sr, s, strlen(s), pos, c)
 void ftr_render_s_n(
     FreeType_Renderer *ftr, Simple_Renderer *sr, 
     const char *s, size_t n, Vec2f pos, Vec4f c);
-void ftr_render_s(
-    FreeType_Renderer *ftr, Simple_Renderer *sr, 
-    const char *s, Vec2f pos, Vec4f c);
 
 float ftr_get_s_width_n(FreeType_Renderer *ftr, const char *s, size_t n);
 float ftr_get_s_width_n_pad(

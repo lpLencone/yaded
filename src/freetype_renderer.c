@@ -55,13 +55,6 @@ void ftr_render_s_n(
     }
 }
 
-void ftr_render_s(
-    FreeType_Renderer *ftr, Simple_Renderer *sr, 
-    const char *s, Vec2f pos, Vec4f c)
-{
-    ftr_render_s_n(ftr, sr, s, strlen(s), pos, c);
-}
-
 float ftr_get_s_width_n(FreeType_Renderer *ftr, const char *s, size_t n)
 {
     float width = 0;
