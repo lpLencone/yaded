@@ -215,20 +215,28 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
     glUniform2f(sr->resolution, w, h);
 
     float max_line_width = 0;
+
+    const char *key = "for";
     
     Vec2f pos = {0};
     for (size_t cy = 0; cy < e->lines.length; cy++) {
         pos.x = 0.0f;
         pos.y = - (float) cy * (FONT_SIZE);
+
         const char *s = editor_get_line_at(e, cy);
+        const char *needle = strstr(s, key);
+        while (needle != NULL) {
+            pos = ftr_render_s_n(ftr, sr, s, needle - s, pos, vec4fs(0.9f));
+            pos = ftr_render_s_n(ftr, sr, key, strlen(key), pos, vec4f(0.5f, 1.0f, 0.3f, 1.0f));
+            s = needle + strlen(key);
+            needle = strstr(s, key);
+        }
         ftr_render_s(ftr, sr, s, pos, vec4fs(0.9f));
 
-        float line_width = ftr_get_s_width_n(ftr, s, strlen(s)) / 0.5f;
+        float line_width = pos.x / 0.5f;
         if (line_width > max_line_width) max_line_width = line_width;
     }
   
-    sr_flush(sr);
-
     // Render Cursor
     sr_set_shader(sr, SHADER_COLOR);
 

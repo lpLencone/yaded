@@ -40,6 +40,8 @@ void sr_init(Simple_Renderer *sr)
 
 void sr_set_shader(Simple_Renderer *sr, Shader_Enum shader)
 {
+    sr_flush(sr);
+
     sr->current_shader = shader;
 
     glBindVertexArray(sr->vao);
@@ -53,7 +55,9 @@ void sr_vertex(
     Simple_Renderer *sr,
     Vec2f p, Vec4f c, Vec2f uv)
 {
-    assert(sr->buffer_count < BUFFER_CAPACITY);
+    if (sr->buffer_count >= BUFFER_CAPACITY) {
+        sr_flush(sr);
+    }
     
     Simple_Vertex *vp = &sr->buffer[sr->buffer_count];
     vp->pos = p;

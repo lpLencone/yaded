@@ -36,7 +36,7 @@ void ftr_init(FreeType_Renderer *ftr, FT_Face face);
 
 #define ftr_render_s(ftr, sr, s, pos, c) \
     ftr_render_s_n(ftr, sr, s, strlen(s), pos, c)
-void ftr_render_s_n(
+Vec2f ftr_render_s_n(
     FreeType_Renderer *ftr, Simple_Renderer *sr, 
     const char *s, size_t n, Vec2f pos, Vec4f c);
 

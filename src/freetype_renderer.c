@@ -30,7 +30,7 @@ void ftr_init(FreeType_Renderer *ftr, FT_Face face)
     init_glyph_texture_atlas(ftr, face);
 }
 
-void ftr_render_s_n(
+Vec2f ftr_render_s_n(
     FreeType_Renderer *ftr, Simple_Renderer *sr,   
     const char *s, size_t n, Vec2f pos, Vec4f c)
 {
@@ -53,6 +53,7 @@ void ftr_render_s_n(
             c
         );
     }
+    return pos;
 }
 
 float ftr_get_s_width_n(FreeType_Renderer *ftr, const char *s, size_t n)
