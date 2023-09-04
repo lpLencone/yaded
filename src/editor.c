@@ -222,7 +222,7 @@ size_t editor_get_line_size(const Editor *e)
 const char *editor_get_line_at(const Editor *e, size_t at)
 {
     const Line *line = list_get(&e->lines, at);
-    return (line == NULL) ? NULL : line->data;
+    return (line == NULL) ? NULL : line->s;
 }
 
 const char *editor_get_line(const Editor *e)
@@ -286,7 +286,7 @@ void editor_merge_line_at(Editor *e, size_t at)
 
     Line *line       = list_get(&e->lines, at);
     Line *line_after = list_get(&e->lines, at + 1);
-    line_write(line, line_after->data, line->size);
+    line_write(line, line_after->s, line->size);
 
     editor_remove_line_at(e, at + 1);
 }
@@ -296,7 +296,7 @@ void editor_break_line_at(Editor *e, size_t at) // todo change size_t to vec2ui
     assert(at < e->lines.length);
 
     Line *line = list_get(&e->lines, at);
-    Line new_line = line_init(&line->data[e->c.x]);
+    Line new_line = line_init(&line->s[e->c.x]);
     list_insert(&e->lines, &new_line, sizeof(new_line), at + 1);
 
     while (e->c.x < line->size) {
@@ -710,7 +710,7 @@ static void save_file(const Editor *e)
 
     for (size_t i = 0; i < e->lines.length; i++) {
         Line *line = list_get(&e->lines, i);
-        fwrite(line->data, 1, line->size, file);
+        fwrite(line->s, 1, line->size, file);
         fputc('\n', file);
     }
     fclose(file);
@@ -813,7 +813,7 @@ static void line_dealloc(void *line)
 
 static int line_compare(void *line1, void *line2)
 {
-    return strcmp(((Line *) line1)->data, ((Line *) line2)->data);
+    return strcmp(((Line *) line1)->s, ((Line *) line2)->s);
 }
 
 
