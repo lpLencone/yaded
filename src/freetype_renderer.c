@@ -30,8 +30,9 @@ void ftr_init(FreeType_Renderer *ftr, FT_Face face)
     init_glyph_texture_atlas(ftr, face);
 }
 
-void ftr_render_s_n(FreeType_Renderer *ftr, Simple_Renderer *sr,   
-                         const char *s, size_t n, Vec2f pos)
+void ftr_render_s_n(
+    FreeType_Renderer *ftr, Simple_Renderer *sr,   
+    const char *s, size_t n, Vec2f pos, Vec4f c)
 {
     for (size_t i = 0; i < n; i++) {
         Glyph_Info gi = ftr->gi[(int) s[i]];
@@ -48,14 +49,17 @@ void ftr_render_s_n(FreeType_Renderer *ftr, Simple_Renderer *sr,
             vec2f(x2, -y2), 
             vec2f(w, -h), 
             vec2f(gi.tx, 0.0f),
-            vec2f(gi.bw / (float) ftr->atlas_w, gi.bh / (float) ftr->atlas_h));
+            vec2f(gi.bw / (float) ftr->atlas_w, gi.bh / (float) ftr->atlas_h),
+            c
+        );
     }
 }
 
-void ftr_render_s(FreeType_Renderer *ftr, Simple_Renderer *sr, 
-                       const char *s, Vec2f pos)
+void ftr_render_s(
+    FreeType_Renderer *ftr, Simple_Renderer *sr, 
+    const char *s, Vec2f pos, Vec4f c)
 {
-    ftr_render_s_n(ftr, sr, s, strlen(s), pos);
+    ftr_render_s_n(ftr, sr, s, strlen(s), pos, c);
 }
 
 float ftr_get_s_width_n(FreeType_Renderer *ftr, const char *s, size_t n)

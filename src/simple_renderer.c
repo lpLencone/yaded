@@ -10,39 +10,31 @@ static void sr_draw(const Simple_Renderer *sr);
 static void sr_clear(Simple_Renderer *sr);
 static void sr_sync(const Simple_Renderer *sr);
 
-void sr_init(
-    Simple_Renderer *sr, 
-    const char *vert_filename, 
-    const char *color_frag_filename, 
-    const char *image_frag_filename,
-    const char *pride_frag_filename) 
+#define vert_shader_filename "shaders/simple.vert"
+
+const char *frag_shader_filenames[SHADER_COUNT] = { // gotta run it from the root directory
+    [SHADER_COLOR] = "shaders/simple_color.frag",   // of the project :D
+    [SHADER_IMAGE] = "shaders/simple_image.frag", 
+    [SHADER_PRIDE] = "shaders/simple_pride.frag",
+    [SHADER_TEXT] = "shaders/simple_text.frag",
+};
+
+static_assert(SHADER_COUNT == 4, "The amount of shaders has changed");
+
+void sr_init(Simple_Renderer *sr) 
 {
     setup_vertices_and_buffers(sr);
 
     GLuint shaders[2];
-    compile_shader(vert_filename, GL_VERTEX_SHADER, &shaders[0]);
-    compile_shader(color_frag_filename, GL_FRAGMENT_SHADER, &shaders[1]);
-    sr->current_shader = SHADER_COLOR;
-    sr->programs[sr->current_shader] = glCreateProgram();
-    attach_shaders(sr->programs[sr->current_shader], shaders, 2);
-    if (!link_program(sr->programs[sr->current_shader])) {
-        exit(1);
-    }
-
-    compile_shader(image_frag_filename, GL_FRAGMENT_SHADER, &shaders[1]);
-    sr->current_shader = SHADER_IMAGE;
-    sr->programs[sr->current_shader] = glCreateProgram();
-    attach_shaders(sr->programs[sr->current_shader], shaders, 2);
-    if (!link_program(sr->programs[sr->current_shader])) {
-        exit(1);
-    }
-
-    compile_shader(pride_frag_filename, GL_FRAGMENT_SHADER, &shaders[1]);
-    sr->current_shader = SHADER_PRIDE;
-    sr->programs[sr->current_shader] = glCreateProgram();
-    attach_shaders(sr->programs[sr->current_shader], shaders, 2);
-    if (!link_program(sr->programs[sr->current_shader])) {
-        exit(1);
+    compile_shader(vert_shader_filename, GL_VERTEX_SHADER, &shaders[0]);
+    for (size_t shader_i = 0; shader_i < SHADER_COUNT; shader_i++) {
+        compile_shader(frag_shader_filenames[shader_i], GL_FRAGMENT_SHADER, &shaders[1]);
+        sr->current_shader = shader_i;
+        sr->programs[sr->current_shader] = glCreateProgram();
+        attach_shaders(sr->programs[sr->current_shader], shaders, 2);
+        if (!link_program(sr->programs[sr->current_shader])) {
+            exit(1);
+        }
     }
 }
 
@@ -105,9 +97,8 @@ void sr_solid_rect(Simple_Renderer *sr, Vec2f p, Vec2f s, Vec4f c)
         vec2fs(0), vec2fs(0), vec2fs(0), vec2fs(0));
 }
 
-void sr_image_rect(Simple_Renderer *sr, Vec2f p, Vec2f s, Vec2f uvp, Vec2f uvs)
+void sr_image_rect(Simple_Renderer *sr, Vec2f p, Vec2f s, Vec2f uvp, Vec2f uvs, Vec4f c)
 {
-    Vec4f c = vec4fs(0);
     sr_quad(
         sr, 
         p, vec2f_add(p, vec2f(s.x, 0)), vec2f_add(p, vec2f(0, s.y)), vec2f_add(p, s),

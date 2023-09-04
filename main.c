@@ -20,9 +20,10 @@
 // #define FONT_FILENAME               "fonts/TSCu_Comic.ttf"
 
 #define CUR_INIT_WIDTH              5.0f
-#define CUR_VEL                     20.0f
-#define CAM_INIT_SCALE              1.8f
+#define CUR_MOVE_VEL                20.0f
+#define CUR_BLINK_VEL               6.0f
 #define CAM_FINAL_SCALE             0.5f
+#define CAM_INIT_SCALE              1.8f
 
 #define SCREEN_WIDTH                800
 #define SCREEN_HEIGHT               600
@@ -159,7 +160,7 @@ EditorKey find_edit_key(int code) {
     assert(0);
 }
 
-static_assert(EK_COUNT == 35, "The number of editor keys has changed");
+static_assert(EK_COUNT == 36, "The number of editor keys has changed");
 
 FT_Face FT_init(void)
 {
@@ -167,7 +168,7 @@ FT_Face FT_init(void)
     if (error) {                                                \
         fprintf(stderr, "ERROR: %s", FT_Error_String(error));   \
         exit(1);                                                \
-    }                                                           \
+    }                                                           
 
     FT_Library library = {0};
     FT_Error error = FT_Init_FreeType(&library);
@@ -189,17 +190,12 @@ FT_Face FT_init(void)
 void renderers_init(Simple_Renderer *sr, FreeType_Renderer *ftr, FT_Face face)
 {
     ftr_init(ftr, face);
+    sr_init(sr);
 
-    sr_init(sr, "shaders/simple.vert", "shaders/simple_color.frag", "shaders/simple_image.frag", "shaders/simple_pride.frag");
-    sr_set_shader(sr, SHADER_COLOR);
-    glUniform2f(sr->resolution, SCREEN_WIDTH, SCREEN_HEIGHT);
-    sr_set_shader(sr, SHADER_IMAGE);
-    glUniform2f(sr->resolution, SCREEN_WIDTH, SCREEN_HEIGHT);
-    sr_set_shader(sr, SHADER_PRIDE);
-    glUniform2f(sr->resolution, SCREEN_WIDTH, SCREEN_HEIGHT);
-    
-    static_assert(SHADER_COUNT == 3, 
-              "The number of shaders has changed; update resolution for the new shaders");
+    for (size_t shader_i = 0; shader_i < SHADER_COUNT; shader_i++) {
+        sr_set_shader(sr, shader_i);
+        glUniform2f(sr->resolution, SCREEN_WIDTH, SCREEN_HEIGHT);
+    }
 }
 
 void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *ftr,
@@ -211,7 +207,7 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
     glViewport(0, 0, w, h);
 
     // Render Glyphs
-    sr_set_shader(sr, SHADER_PRIDE);
+    sr_set_shader(sr, SHADER_TEXT);
 
     glUniform1f(sr->time, (float) SDL_GetTicks() / 1000.0f);
     glUniform2f(sr->camera, scr->cam.pos.x, -scr->cam.pos.y);
@@ -225,7 +221,7 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
         pos.x = 0.0f;
         pos.y = - (float) cy * (FONT_SIZE);
         const char *s = editor_get_line_at(e, cy);
-        ftr_render_s(ftr, sr, s, pos);
+        ftr_render_s(ftr, sr, s, pos, vec4fs(0.9f));
 
         float line_width = ftr_get_s_width_n(ftr, s, strlen(s)) / 0.5f;
         if (line_width > max_line_width) max_line_width = line_width;
@@ -245,16 +241,18 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
         case EM_EDITING:
         case EM_SELECTION: {
             scr->cur.actual_width = CUR_INIT_WIDTH;
-            Uint32 CURSOR_BLINK_THRESHOLD = 500;
-            Uint32 CURSOR_BLINK_PERIOD    = 500;
-            Uint32 t = SDL_GetTicks() - scr->cur.last_moved;
-            if (t < CURSOR_BLINK_THRESHOLD || (t / CURSOR_BLINK_PERIOD) % 2 != 0) {
-                sr_solid_rect(
-                    sr, vec2f(scr->cur.render_pos.x, -scr->cur.render_pos.y),
-                        vec2f(scr->cur.actual_width, scr->cur.height),
-                        vec4fs(1.0));
-            }
+            float CURSOR_BLINK_THRESHOLD = 0.5 * 3.14 / CUR_BLINK_VEL;
+            float t = (float) (SDL_GetTicks() - scr->cur.last_moved) / 1000.0f;
+            bool threshold = t > CURSOR_BLINK_THRESHOLD;
+            float blinking_state = (1 + sin(CUR_BLINK_VEL * t)) / 2;
+            Vec4f color = (threshold) ? vec4fs(blinking_state) : vec4fs(1.0f);
 
+            sr_solid_rect(
+                sr, vec2f(scr->cur.render_pos.x, -scr->cur.render_pos.y),
+                    vec2f(scr->cur.actual_width, scr->cur.height),
+                    color);
+
+            // Render selection background
             if (e->mode == EM_SELECTION) {
                 Vec2ui csbegin = e->c;  // Cursor select begin
                 Vec2ui csend = e->cs;   // Cursor select end
@@ -519,8 +517,15 @@ int main(int argc, char *argv[])
                             }
                             update_last_moved(&scr);
                         } break;
+
+                        case SDLK_x: {
+                            if (SDL_CTRL && e.mode == EM_SELECTION) {
+                                SDL_SetClipboardText(editor_retrieve_selection(&e));
+                                editor_process_key(&e, EK_CUT);
+                            }
+                        }
                     }
-    static_assert(EK_COUNT == 35, "The number of editor keys has changed");
+    static_assert(EK_COUNT == 36, "The number of editor keys has changed");
                 } break;
 
                 case SDL_TEXTINPUT: {
@@ -553,7 +558,7 @@ int main(int argc, char *argv[])
 
         scr.cur.vel = vec2f_mul(
             vec2f_sub(scr.cur.render_pos, scr.cur.actual_pos),
-            vec2fs(CUR_VEL)
+            vec2fs(CUR_MOVE_VEL)
         );
         scr.cur.render_pos = vec2f_sub(
             scr.cur.render_pos,

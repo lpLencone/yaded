@@ -22,6 +22,7 @@ typedef enum {
 typedef enum {
     SHADER_COLOR,
     SHADER_IMAGE,
+    SHADER_TEXT,
     SHADER_PRIDE,
     SHADER_COUNT,
 } Shader_Enum;
@@ -47,12 +48,7 @@ typedef struct {
     size_t buffer_count;
 } Simple_Renderer;
 
-void sr_init(
-    Simple_Renderer *sr, 
-    const char *vert_filename, 
-    const char *color_frag_filename, 
-    const char *image_frag_filename,
-    const char *pride_frag_filename);
+void sr_init(Simple_Renderer *sr);
 
 void sr_set_shader(Simple_Renderer *sr, Shader_Enum shader);
 
@@ -78,7 +74,7 @@ void sr_solid_rect(
 
 void sr_image_rect(
     Simple_Renderer *sr, 
-    Vec2f p, Vec2f s, Vec2f uvp, Vec2f uvs);
+    Vec2f p, Vec2f s, Vec2f uvp, Vec2f uvs, Vec4f c);
 
 void sr_flush(Simple_Renderer *sr);
 

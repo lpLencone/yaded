@@ -46,6 +46,7 @@ typedef enum {
     EK_SAVE,
     EK_COPY,
     EK_PASTE,
+    EK_CUT,
     EK_COUNT,
 } EditorKey;
 

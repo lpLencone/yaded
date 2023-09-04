@@ -65,6 +65,10 @@ Editor editor_init(const char *pathname)
     e.mode = EM_EDITING;
 
     editor_open(&e, pathname);
+    if (e.lines.length == 0) {
+        Line line = line_init("");
+        list_append(&e.lines, &line, sizeof(line));
+    }
 
     return e;
 }
@@ -124,7 +128,8 @@ void editor_process_key(Editor *e, EditorKey key)
 
                 case EK_SAVE:
                 case EK_COPY:
-                case EK_PASTE: {
+                case EK_PASTE: 
+                case EK_CUT: {
                     editor_action(e, key);
                 } break;
 
@@ -171,7 +176,7 @@ void editor_process_key(Editor *e, EditorKey key)
     }
 }
 
-static_assert(EK_COUNT == 35, "The number of editor keys has changed");
+static_assert(EK_COUNT == 36, "The number of editor keys has changed");
 
 void editor_write(Editor *e, const char *s)
 {
@@ -195,7 +200,7 @@ void editor_write(Editor *e, const char *s)
             sv_chunk = SV_NULL;
         }
 
-        if (e->c.y == e->lines.length) {
+        if (e->c.y >= e->lines.length) {
             Line line = line_init_n(cstr, strlen(cstr));
             list_insert(&e->lines, &line, sizeof(line), e->c.y);
         } else {
@@ -516,6 +521,11 @@ static void editor_action(Editor *e, EditorKey key)
             editor_paste(e);
         } break;
 
+        case EK_CUT: {
+            editor_copy_selection(e);
+            editor_delete_selection(e);
+        } break;
+
         default:
             assert(0);
     }
@@ -614,7 +624,7 @@ static void editor_select(Editor *e, EditorKey key)
     }
 }
 
-static_assert(EK_COUNT == 35, "The number of editor keys has changed");
+static_assert(EK_COUNT == 36, "The number of editor keys has changed");
 
 static void editor_delete_selection(Editor *e)
 {
@@ -678,11 +688,10 @@ void editor_open(Editor *e, const char *path)
 
     update_pathname(&e->pathname, path);
     const char *pathname = get_pathname_cstr(&e->pathname);
-
     errno = 0;
     struct stat statbuf;
     if (stat(pathname, &statbuf) != 0) {
-        if (errno == ENOENT) return; // File does not exist, it's fine
+        if (errno == ENOENT) return; // File does not exist, don't crash
         fprintf(stderr, "Could not get stat for \"%s\": %s", pathname, strerror(errno));
         exit(1);
     }
@@ -791,18 +800,26 @@ const char *get_pathname_cstr(const List *pathname)
         strcpy(buffer_ptr, path);
         buffer_ptr += strlen(path);
     }
+    *buffer_ptr = '\0';
     return buffer;
 }
 
 static void update_pathname(List *pathname, const char *path)
 {
     assert(pathname != NULL && path != NULL);
-    if (strcmp(path, "..") == 0) {
-        if (pathname->length > 0) {
-            list_remove(pathname, pathname->length - 1);
+
+    char *path_dump = strdup(path);
+    char *save_ptr;
+    path = strtok_r(path_dump, "/", &save_ptr);
+    while (path != NULL) {
+        if (strcmp(path, "..") == 0) {
+            if (pathname->length > 0) {
+                list_remove(pathname, pathname->length - 1);
+            }
+        } else if (strcmp(path, ".") != 0) {
+            list_append(pathname, path, strlen(path) + 1);
         }
-    } else if (strcmp(path, ".") != 0) {
-        list_append(pathname, path, strlen(path) + 1);
+        path = strtok_r(save_ptr, "/", &save_ptr);
     }
 }
 
