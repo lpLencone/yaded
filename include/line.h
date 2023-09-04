@@ -1,6 +1,8 @@
 #ifndef YADED_LINE_H_
 #define YADED_LINE_H_
 
+#include "ds/dynamic_array.h"
+
 #include <stddef.h>
 
 #ifndef debug_print
@@ -8,11 +10,7 @@
 #define debug_print printf("%20s : %4d : %-20s\n", __FILE__, __LINE__, __func__);
 #endif
 
-typedef struct {
-    size_t capacity;
-    size_t size;
-    char *s;
-} Line;
+typedef da_make(Line, char);
 
 #define line_init(s) line_init_n(s, strlen(s))
 Line line_init_n(const char *s, size_t n);

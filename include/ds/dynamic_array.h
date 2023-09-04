@@ -1,49 +1,54 @@
 #ifndef YADED_DS_DYNAMIC_ARRAY_H_
 #define YADED_DS_DYNAMIC_ARRAY_H_
 
+#include <assert.h>
+#include <stdlib.h>
+
+#define DA_INIT_CAPACITY 1
+#define TYPESIZE(da) sizeof(*(da)->data)
+
 #define da_make(da, t) \
     struct { \
-        size_t tsize; \
         size_t size; \
         size_t capacity; \
         t *data; \
     } da
 
-#define da_init(da, t) \
+#define da_zero(da) \
     do { \
-        (da)->tsize = sizeof(t); \
         (da)->size = 0; \
-        (da)->capacity = 2; \
-        (da)->data = calloc(2, (da)->tsize); \
+        (da)->capacity = 0; \
+        (da)->data = NULL; \
     } while (0)
 
-#define da_create(da, t) \
-    struct { \
-        size_t tsize; \
-        size_t size; \
-        size_t capacity; \
-        t *data; \
-    } da = { \
-        .tsize = sizeof(t), \
-        .size = 0, \
-        .capacity = 2, \
-        .data = calloc(2, sizeof(t)) \
-    }
+#define da_init(da, d, n) \
+    do { \
+        (da)->size = n; \
+        (da)->capacity = n; \
+        (da)->data = malloc(n * TYPESIZE(da)); \
+        memcpy((da)->data, d, n * TYPESIZE(da)); \
+    } while(0) \
+
+#define da_create_zero(da, t) \
+    da_make(da, t); \
+    da_zero(&da)
+
+#define da_create(da, t, d, n) \
+    da_make(da, t); \
+    da_init(&da, d, n)
 
 #define da_end(da) \
     do { \
+        assert(da != NULL && (da)->data != NULL); \
         free((da)->data); \
         (da)->data = NULL; \
     } while (0)
 
 #define da_clear(da) \
     do { \
-        if ((da)->capacity != 0) { \
-            (da)->size = 0; \
-            (da)->capacity = 1; \
-            (da)->data = realloc((da)->data, (da)->capacity * (da)->tsize); \
-            memset((da)->data, 0, 1); \
-        } \
+        da_end(da); \
+        (da)->size = 0; \
+        (da)->capacity = 0; \
     } while (0)
 
 #define da_insert_n(da, d, n, at) \
@@ -51,18 +56,23 @@
         assert((da) != NULL && d != NULL); \
         assert(at <= (da)->size); \
  \
+        if ((da)->capacity == 0) { \
+            (da)->capacity = DA_INIT_CAPACITY; \
+            (da)->data = calloc(DA_INIT_CAPACITY, TYPESIZE(da)); \
+        } \
+ \
         while ((da)->capacity < (da)->size + n + 1) { \
             (da)->capacity *= 2; \
-            (da)->data = realloc((da)->data, (da)->capacity * (da)->tsize); \
+            (da)->data = realloc((da)->data, (da)->capacity * TYPESIZE(da)); \
             assert((da)->data != NULL); \
         } \
  \
         memmove( \
             (da)->data + (at + n), \
             (da)->data + at, \
-            ((da)->size - at) * (da)->tsize \
+            ((da)->size - at) * TYPESIZE(da) \
         ); \
-        memcpy((da)->data + at, d, (n * (da)->tsize)); \
+        memcpy((da)->data + at, d, (n * TYPESIZE(da))); \
  \
         (da)->size += n; \
     } while (0)
@@ -77,9 +87,9 @@
         assert(0 < from && from + n <= (da)->size);  \
  \
         memmove( \
-            (da)->data + (da)->tsize * (from + n),  \
-            (da)->data + (da)->tsize * from,  \
-            (da)->size - (da)->tsize * n \
+            (da)->data + TYPESIZE(da) * (from + n),  \
+            (da)->data + TYPESIZE(da) * from,  \
+            (da)->size - TYPESIZE(da) * n \
         ); \
         (da)->size -= n; \
  \
@@ -92,14 +102,14 @@
 
 #define da_get_copy_n(da, copybuf, from, n) \
     do { \
-        copybuf = calloc(from + n, (da)->tsize); \
-        memcpy(copybuf, &((da)->data[from]), n * (da)->tsize); \
+        copybuf = calloc(from + n, TYPESIZE(da)); \
+        memcpy(copybuf, &((da)->data[from]), n * TYPESIZE(da)); \
     } while (0)
 #define da_get_copy(da, copybuf) da_get_copy_n(da, copybuf, 0, (da)->size)
 
 #define da_peek(da, peekp, from) \
     do { \
-        peekp = &da->data[from] \
+        peekp = &(da)->data[from]; \
     } while (0)
 
 #endif // YADED_DS_DYNAMIC_ARRAY_H_
