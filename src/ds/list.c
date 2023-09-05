@@ -104,8 +104,10 @@ void *list_get(const List *list, size_t at)
 
 void list_quicksort(List *list)
 {
-    Node *tail = get_node_at(list, list->length - 1);
-    quicksort_recursive(list->head, tail, list->compare);
+    if (list->length > 0) {
+        Node *tail = get_node_at(list, list->length - 1);
+        quicksort_recursive(list->head, tail, list->compare);
+    }
 }
 
 

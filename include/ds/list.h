@@ -4,7 +4,7 @@
 #include "ds/node.h"
 
 typedef void (*DeallocFunc)(void *data);
-typedef int  (*CompareFunc)(void *data1, void *data2);
+typedef int  (*CompareFunc)(const void *data1, const void *data2);
 
 typedef struct {
     Node *head;

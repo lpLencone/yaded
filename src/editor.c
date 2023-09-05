@@ -28,7 +28,7 @@ static void open_file(Editor *e, const char *filename);
 static void open_dir(Editor *e, const char *dirname);
 
 // Editor Operations
-static void editor_delete_char(Editor *e);
+#define editor_delete_char(e) editor_delete_char_at(e, e->c);
 static void editor_browsing(Editor *e, EditorKey key);
 static void editor_move(Editor *e, EditorKey key);
 static void editor_edit(Editor *e, EditorKey key);
@@ -36,13 +36,13 @@ static void editor_action(Editor *e, EditorKey key);
 static void editor_select(Editor *e, EditorKey key);
 static void editor_delete_selection(Editor *e);
 static void editor_copy_selection(Editor *e);
-static void editor_paste(Editor *e);
+#define editor_paste(e) editor_write(e, e->clipboard);
 
 const char *get_pathname_cstr(const List *pathname);
 static void update_pathname(List *pathname, const char *path);
 
 static void line_dealloc(void *line);
-static int line_compare(void *line1, void *line2);
+static int line_compare(const void *line1, const void *line2);
 
 Editor editor_init(const char *pathname)
 {
@@ -220,19 +220,14 @@ void editor_write(Editor *e, const char *s)
 
 size_t editor_get_line_size(const Editor *e)
 {
-    Line *line = list_get(&e->lines, e->c.y);
-    return (line == NULL) ? 0: line->size;
+    const Line *line = list_get(&e->lines, e->c.y);
+    return (line == NULL) ? 0 : line->size;
 }
 
 const char *editor_get_line_at(const Editor *e, size_t at)
 {
     const Line *line = list_get(&e->lines, at);
     return (line == NULL) ? NULL : line->s;
-}
-
-const char *editor_get_line(const Editor *e)
-{
-    return editor_get_line_at(e, e->c.y);
 }
 
 char *editor_retrieve_selection(const Editor *e)
@@ -247,8 +242,7 @@ char *editor_retrieve_selection(const Editor *e)
         csend = temp;
     }
 
-    da_create_zero(selectbuf, char);
-
+    da_make_zero(selectbuf, char);
     for (int cy = csbegin.y; cy <= (int) csend.y; cy++) {
         const char *s = editor_get_line_at(e, cy);
         size_t slen = strlen(s);
@@ -267,8 +261,8 @@ char *editor_retrieve_selection(const Editor *e)
             da_append(&selectbuf, "\n");
         }
     }
+    da_append(&selectbuf, "\0");
 
-    selectbuf.data[selectbuf.size] = '\0';
 
     char *s;
     da_get_copy(&selectbuf, s);
@@ -331,11 +325,6 @@ void editor_delete_char_at(Editor *e, Vec2ui at)
     } else {
         line_delete_char(line, at.x);
     }
-}
-
-void editor_delete_char(Editor *e)
-{
-    editor_delete_char_at(e, e->c);
 }
 
 static void editor_move(Editor *e, EditorKey key)
@@ -674,12 +663,6 @@ static void editor_copy_selection(Editor *e)
     e->clipboard = editor_retrieve_selection(e);
 }
 
-static void editor_paste(Editor *e)
-{
-    editor_write(e, e->clipboard);
-}
-
-
 /* File I/O */
 
 void editor_open(Editor *e, const char *path)
@@ -828,7 +811,7 @@ static void line_dealloc(void *line)
     line_destroy((Line *) line);
 }
 
-static int line_compare(void *line1, void *line2)
+static int line_compare(const void *line1, const void *line2)
 {
     return strcmp(((Line *) line1)->s, ((Line *) line2)->s);
 }

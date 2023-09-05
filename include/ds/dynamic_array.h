@@ -3,16 +3,28 @@
 
 #include <assert.h>
 #include <stdlib.h>
+#include <string.h>
 
-#define DA_INIT_CAPACITY 1
+#ifndef debug_print
+#include <stdio.h>
+#define debug_print printf("%20s : %4d : %-20s\n", __FILE__, __LINE__, __func__);
+#endif
+
+#ifndef DA_INIT_CAPACITY
+#  define DA_INIT_CAPACITY  1
+#endif // DA_INIT_CAPACITY
+
 #define TYPESIZE(da) sizeof(*(da)->data)
 
-#define da_make(da, t) \
+#define da_var(da, t) \
     struct { \
         size_t size; \
         size_t capacity; \
         t *data; \
     } da
+
+// #define da_Type(da, t) 
+//     typedef da_var(da, t)
 
 #define da_zero(da) \
     do { \
@@ -27,14 +39,14 @@
         (da)->capacity = n; \
         (da)->data = malloc(n * TYPESIZE(da)); \
         memcpy((da)->data, d, n * TYPESIZE(da)); \
-    } while(0) \
+    } while (0) \
 
-#define da_create_zero(da, t) \
-    da_make(da, t); \
+#define da_make_zero(da, t) \
+    da_var(da, t); \
     da_zero(&da)
 
-#define da_create(da, t, d, n) \
-    da_make(da, t); \
+#define da_make(da, t, d, n) \
+    da_var(da, t); \
     da_init(&da, d, n)
 
 #define da_end(da) \
@@ -42,14 +54,10 @@
         assert(da != NULL && (da)->data != NULL); \
         free((da)->data); \
         (da)->data = NULL; \
-    } while (0)
-
-#define da_clear(da) \
-    do { \
-        da_end(da); \
         (da)->size = 0; \
         (da)->capacity = 0; \
     } while (0)
+
 
 #define da_insert_n(da, d, n, at) \
     do { \
@@ -84,21 +92,26 @@
 
 #define da_remove_n(da, from, n) \
     do { \
-        assert(0 < from && from + n <= (da)->size);  \
+        assert(from + n < (da)->size + 1);  \
  \
-        memmove( \
-            (da)->data + TYPESIZE(da) * (from + n),  \
-            (da)->data + TYPESIZE(da) * from,  \
-            (da)->size - TYPESIZE(da) * n \
-        ); \
+        if (from + n == (da)->size) { \
+            memset((da)->data + from, 0, n * TYPESIZE(da)); \
+        } else { \
+            memmove( \
+                (da)->data + from,  \
+                (da)->data + (from + n),  \
+                ((da)->size + 1 - n) * TYPESIZE(da) \
+            ); \
+        } \
         (da)->size -= n; \
  \
         if ((da)->size < (da)->capacity / 2) { \
             (da)->data = realloc((da)->data, (da)->capacity / 2); \
+            assert((da)->data != NULL); \
             (da)->capacity /= 2; \
         } \
     } while (0)
-#define da_remove(da, at) da_remove(da, at, 1)
+#define da_remove_at(da, at) da_remove_n(da, at, 1)
 
 #define da_get_copy_n(da, copybuf, from, n) \
     do { \

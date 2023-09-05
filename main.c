@@ -1,3 +1,5 @@
+#define _DEFAULT_SOURCE
+
 #include <assert.h>
 #include <math.h>
 #include <stdbool.h>
@@ -198,6 +200,16 @@ void renderers_init(Simple_Renderer *sr, FreeType_Renderer *ftr, FT_Face face)
     }
 }
 
+typedef struct {
+    size_t i;
+    size_t len;
+} Key_Pair;
+
+int key_compare(const void *key1, const void *key2)
+{
+    return ((Key_Pair *) key1)->i - ((Key_Pair *) key2)->i;
+}
+
 void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *ftr,
                    Editor *e, Screen *scr)
 {
@@ -213,28 +225,45 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
     glUniform2f(sr->camera, scr->cam.pos.x, -scr->cam.pos.y);
     glUniform2f(sr->scale, scr->cam.scale, scr->cam.scale);
     glUniform2f(sr->resolution, w, h);
-
     float max_line_width = 0;
-
-    const char *key = "for";
+    const char *keys[] = {"for ", "if ", "void ", "int ", "#define ", "#include ", "while ", "do ", ";", "const ", "float ", "size_t ", "Vec2f ", "Vec4f "};
     
     Vec2f pos = {0};
+    List keysl = list_init(NULL, key_compare);
     for (size_t cy = 0; cy < e->lines.length; cy++) {
         pos.x = 0.0f;
         pos.y = - (float) cy * (FONT_SIZE);
 
         const char *s = editor_get_line_at(e, cy);
-        const char *needle = strstr(s, key);
-        while (needle != NULL) {
-            pos = ftr_render_s_n(ftr, sr, s, needle - s, pos, vec4fs(0.9f));
-            pos = ftr_render_s_n(ftr, sr, key, strlen(key), pos, vec4f(0.5f, 1.0f, 0.3f, 1.0f));
-            s = needle + strlen(key);
-            needle = strstr(s, key);
+        const char *needle = NULL;
+        
+        for (size_t key_i = 0; key_i < sizeof(keys) / sizeof(keys[0]); key_i++) {
+            needle = strstr(s, keys[key_i]);
+            if (needle != NULL) {
+                Key_Pair kpair = {
+                    .i = needle - s,
+                    .len = strlen(keys[key_i])
+                };
+                list_append(&keysl, &kpair, sizeof(kpair));
+            }
         }
-        ftr_render_s(ftr, sr, s, pos, vec4fs(0.9f));
+        list_quicksort(&keysl);
+        
+        Node *cursor = keysl.head;
+        size_t last_i = 0;
+        while (cursor != NULL) {
+            Key_Pair *kpair = cursor->data;
+            pos = ftr_render_s_n(ftr, sr, s + last_i, kpair->i - last_i, pos, vec4fs(0.9f));
+            pos = ftr_render_s_n(ftr, sr, s + kpair->i, kpair->len, pos, vec4f(0.5f, 1.0f, 0.3f, 1.0f));
+            last_i = kpair->i + kpair->len;
+            cursor = cursor->next;
+        }
+        pos = ftr_render_s(ftr, sr, s + last_i, pos, vec4fs(0.9f));
 
         float line_width = pos.x / 0.5f;
         if (line_width > max_line_width) max_line_width = line_width;
+
+        list_clear(&keysl);
     }
   
     // Render Cursor

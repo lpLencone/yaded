@@ -85,8 +85,9 @@ void editor_merge_line_at(Editor *e, size_t at);
 void editor_break_line_at(Editor *e, size_t at);
 
 size_t editor_get_line_size(const Editor *e);
-const char *editor_get_line(const Editor *e);
+#define editor_get_line(e) editor_get_line_at(e, (e)->c.y)
 const char *editor_get_line_at(const Editor *e, size_t at);
+
 char *editor_retrieve_selection(const Editor *e);
 
 void editor_open(Editor *e, const char *pathname);

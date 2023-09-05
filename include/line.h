@@ -24,7 +24,8 @@ void line_clear(Line *line);
 void line_write_n(Line *line, const char *s, size_t n, size_t at);
 
 #define line_append(line, s) line_append_n(line, s, strlen(s))
-void line_append_n(Line *line, const char *s, size_t n);
+#define line_append_n(line, s, n) line_write_n(line, s, strlen(s))
+
 void line_delete_char(Line *line, size_t at);
 
 #endif // YADED_LINE_H_

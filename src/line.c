@@ -15,6 +15,7 @@ Line line_init_n(const char *s, size_t n)
     line.capacity = line.size + 1;
     line.s = strndup(s, n);
     line.s[n] = '\0';
+
     
     return line;
 }
@@ -25,6 +26,7 @@ void line_destroy(Line *line)
 
     free(line->s);
     line->s = NULL;
+
 }
 
 void line_clear(Line *line)
@@ -34,6 +36,7 @@ void line_clear(Line *line)
     line->s[0] = '\0';
     line->size = 0;
     line->capacity = 1;
+
 }
 
 void line_write_n(Line *line, const char *s, size_t n, size_t at)
@@ -49,12 +52,9 @@ void line_write_n(Line *line, const char *s, size_t n, size_t at)
     memcpy(line->s + at, s, n);
     
     line->size += n;
-    line->s[line->size] = '\0';
-}
 
-void line_append_n(Line *line, const char *s, size_t n)
-{
-    line_write_n(line, s, n, strlen(s));
+    line->s[line->size] = '\0';
+
 }
 
 void line_delete_char(Line *line, size_t at)
@@ -72,4 +72,5 @@ void line_delete_char(Line *line, size_t at)
         line->s = realloc(line->s, line->capacity / 2);
         line->capacity /= 2;
     }
+
 }
