@@ -141,6 +141,10 @@ void editor_process_key(Editor *e, EditorKey key)
                 case EK_SELECT_RIGHTW:
                 case EK_SELECT_LINE_HOME:
                 case EK_SELECT_LINE_END:
+                case EK_SELECT_WORD:
+                case EK_SELECT_LINE:
+                case EK_SELECT_OUTER_BLOCK:
+                case EK_SELECT_NEXT_BLOCK:
                 case EK_SELECT_HOME:
                 case EK_SELECT_END:
                 case EK_SELECT_ALL: {
@@ -176,7 +180,7 @@ void editor_process_key(Editor *e, EditorKey key)
     }
 }
 
-static_assert(EK_COUNT == 36, "The number of editor keys has changed");
+static_assert(EK_COUNT == 40, "The number of editor keys has changed");
 
 void editor_write(Editor *e, const char *s)
 {
@@ -373,12 +377,30 @@ static void editor_move(Editor *e, EditorKey key)
         } break;
 
         case EK_UP: {
+            if (e->mode == EM_SELECTION_RESOLUTION) {
+                int diff = vec2ui_cmp_yx(e->c, e->cs);
+                if (diff > 0) {
+                    e->c = e->cs;
+                }
+                e->mode = EM_EDITING;
+                return;
+            }
+
             if (e->c.y > 0) {
                 e->c.y--;
             }
         } break;
 
         case EK_DOWN: {
+            if (e->mode == EM_SELECTION_RESOLUTION) {
+                int diff = vec2ui_cmp_yx(e->c, e->cs);
+                if (diff < 0) {
+                    e->c = e->cs;
+                }
+                e->mode = EM_EDITING;
+                return;
+            }
+
             if (e->c.y + 1 < e->lines.length) {
                 e->c.y++;
             }
@@ -560,6 +582,21 @@ static void editor_browsing(Editor *e, EditorKey key)
     }
 }
 
+static void find_scope_end(Editor *e)
+{
+    const char *s = editor_get_line(e);
+    size_t slen = strlen(s);
+
+    size_t scope = 1;
+    while (scope > 0 && (e->c.x < slen || e->c.y < e->lines.length)) {
+        editor_move(e, EK_RIGHT);
+        s = editor_get_line(e); // SLOW
+
+        if      (*strchrnul("{[(", s[e->c.x]) != '\0') scope++;
+        else if (*strchrnul("}])", s[e->c.x]) != '\0') scope--;
+    }
+}
+
 static void editor_select(Editor *e, EditorKey key)
 {
     switch (key) {
@@ -595,6 +632,84 @@ static void editor_select(Editor *e, EditorKey key)
             editor_move(e, EK_LINE_END);
         } break;
 
+        case EK_SELECT_WORD: {
+            const char *s = editor_get_line(e);
+
+            if (isspace(s[e->c.x]) || s[e->c.x] == '\0') {
+                e->mode = EM_EDITING;
+                return;
+            }
+
+            while ((!isspace(s[e->c.x]) && s[e->c.x] != '\0') && e->c.x > 0) {
+                editor_move(e, EK_LEFT);
+            }
+            if (isspace(s[e->c.x])) {
+                editor_move(e, EK_RIGHT);
+            }
+            e->cs = e->c;
+            editor_move(e, EK_RIGHTW);
+        } break;
+
+        case EK_SELECT_LINE: {
+            e->cs = vec2ui(0, e->c.y);
+            editor_move(e, EK_LINE_END);
+        } break;
+
+        case EK_SELECT_OUTER_BLOCK: {
+            if (e->c.x == 0 && e->c.y == 0) {
+                e->mode = EM_EDITING;
+                return;
+            }
+
+            const char *s = NULL;
+            
+            size_t stack_i = 0;
+            Vec2ui save_cursor = e->c;
+            while (e->c.x > 0 || e->c.y > 0) { // will not find brackets here, even if there's any
+                editor_move(e, EK_LEFT);
+                s = editor_get_line(e); // SLOW
+                if (*strchrnul("{[(", s[e->c.x]) != '\0') {
+                    if (stack_i == 0) break;
+                    stack_i--;
+                }
+                if (*strchrnul("}])", s[e->c.x]) != '\0') {
+                    stack_i++;
+                }
+            }
+
+            if (*strchrnul("{[(", s[e->c.x]) != '\0') { // if found, find the corresponding closing bracket
+                e->cs = e->c;
+                find_scope_end(e);
+                editor_move(e, EK_RIGHT);
+            } else {
+                e->c = save_cursor;
+            }
+        } break;
+
+        case EK_SELECT_NEXT_BLOCK: {
+            const char *s = editor_get_line(e);
+            size_t slen = strlen(s);
+
+            while ((isspace(s[e->c.x]) || s[e->c.x] == '\0') && 
+                   (e->c.x < slen || e->c.y + 1 < e->lines.length)) 
+            {
+                editor_move(e, EK_RIGHT);
+                s = editor_get_line(e); // SLOW
+            }
+
+            if (*strchrnul("{[(", s[e->c.x]) != '\0') {
+                find_scope_end(e);
+                editor_move(e, EK_RIGHT);
+            } else {
+                while ((*strchrnul("{[(", s[e->c.x]) == '\0') &&
+                       (e->c.x < slen || e->c.y + 1 < e->lines.length)) 
+                {
+                    editor_move(e, EK_RIGHT);
+                    s = editor_get_line(e); // SLOW
+                }
+            }
+        } break;
+
         case EK_SELECT_HOME: {
             editor_move(e, EK_HOME);
         } break;
@@ -613,7 +728,7 @@ static void editor_select(Editor *e, EditorKey key)
     }
 }
 
-static_assert(EK_COUNT == 36, "The number of editor keys has changed");
+static_assert(EK_COUNT == 40, "The number of editor keys has changed");
 
 static void editor_delete_selection(Editor *e)
 {
@@ -815,12 +930,4 @@ static int line_compare(const void *line1, const void *line2)
 {
     return strcmp(((Line *) line1)->s, ((Line *) line2)->s);
 }
-
-
-
-
-
-
-
-
 

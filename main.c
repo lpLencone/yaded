@@ -58,6 +58,10 @@ typedef struct {
         size_t last_cy;
         Uint32 last_moved; // in milisec
     } cur;
+    struct {
+        SDL_Keysym last_key;
+        size_t ctrl_a_pressed;
+    } state;
 } Screen;
 
 // SDL check codes
@@ -162,8 +166,6 @@ EditorKey find_edit_key(int code) {
     assert(0);
 }
 
-static_assert(EK_COUNT == 36, "The number of editor keys has changed");
-
 FT_Face FT_init(void)
 {
 #define ft_check_error                                          \
@@ -254,7 +256,7 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
         while (cursor != NULL) {
             Key_Pair *kpair = cursor->data;
             pos = ftr_render_s_n(ftr, sr, s + last_i, kpair->i - last_i, pos, vec4fs(0.9f));
-            pos = ftr_render_s_n(ftr, sr, s + kpair->i, kpair->len, pos, vec4f(0.5f, 1.0f, 0.3f, 1.0f));
+            pos = ftr_render_s_n(ftr, sr, s + kpair->i, kpair->len, pos, vec4fs(0.6f));
             last_i = kpair->i + kpair->len;
             cursor = cursor->next;
         }
@@ -531,9 +533,48 @@ int main(int argc, char *argv[])
 
                         case SDLK_a: {
                             if (SDL_CTRL) {
-                                editor_process_key(&e, EK_SELECT_ALL);
+                                if ((scr.state.last_key.sym != SDLK_a) ||
+                                    (scr.state.last_key.mod & KMOD_CTRL) == 0 ||
+                                    (scr.state.last_key.mod & KMOD_SHIFT) != 0)
+                                {
+                                    scr.state.ctrl_a_pressed = 0;
+                                }
+
+                                const char *s = editor_get_line(&e);
+                                if ((isspace(s[e.c.x]) || s[e.c.x] == '\0') &&
+                                    (scr.state.ctrl_a_pressed == 0)) 
+                                {
+                                    scr.state.ctrl_a_pressed++;
+                                    
+                                    if (strlen(s) == 0) {
+                                        scr.state.ctrl_a_pressed++;
+                                    }
+                                }
+
+                                switch (scr.state.ctrl_a_pressed) {
+                                    case 0: {
+                                        editor_process_key(&e, EK_SELECT_WORD);
+                                    } break;
+                                    case 1: {
+                                        editor_process_key(&e, EK_SELECT_LINE);
+                                    } break;
+                                    default: {
+                                        editor_process_key(&e, EK_SELECT_ALL);
+                                    }
+                                }
+                                scr.state.ctrl_a_pressed++;
+                                update_last_moved(&scr);
                             }
-                            update_last_moved(&scr);
+                        } break;
+
+                        case SDLK_b: {
+                             if (SDL_CTRL) {
+                                if (SDL_SHIFT) {
+                                    editor_process_key(&e, EK_SELECT_NEXT_BLOCK);
+                                } else {
+                                    editor_process_key(&e, EK_SELECT_OUTER_BLOCK);
+                                }
+                             }
                         } break;
 
                         case SDLK_c: {
@@ -562,14 +603,16 @@ int main(int argc, char *argv[])
                             }
                         }
                     }
-    static_assert(EK_COUNT == 36, "The number of editor keys has changed");
+                    scr.state.last_key = event.key.keysym;
                 } break;
+                static_assert(EK_COUNT == 40, "The number of editor keys has changed");
 
                 case SDL_TEXTINPUT: {
                     editor_write(&e, event.text.text);
                     update_last_moved(&scr);
                 } break;
             }
+
         }
 
         // Update Cursor
