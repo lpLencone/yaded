@@ -612,7 +612,6 @@ int main(int argc, char *argv[])
                     update_last_moved(&scr);
                 } break;
             }
-
         }
 
         // Update Cursor
