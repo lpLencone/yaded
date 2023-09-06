@@ -102,7 +102,9 @@ void editor_process_key(Editor *e, EditorKey key)
                 case EK_HOME:
                 case EK_END:
                 case EK_PAGEUP:
-                case EK_PAGEDOWN: {
+                case EK_PAGEDOWN: 
+                case EK_NEXT_EMPTY_LINE: 
+                case EK_PREV_EMPTY_LINE: {
                     if (e->mode == EM_SELECTION) {
                         e->mode = EM_SELECTION_RESOLUTION;
                     }
@@ -147,6 +149,8 @@ void editor_process_key(Editor *e, EditorKey key)
                 case EK_SELECT_NEXT_BLOCK:
                 case EK_SELECT_HOME:
                 case EK_SELECT_END:
+                case EK_SELECT_NEXT_EMPTY_LINE:
+                case EK_SELECT_PREV_EMPTY_LINE:
                 case EK_SELECT_ALL: {
                     if (e->mode != EM_SELECTION) {
                         e->cs = e->c;
@@ -155,8 +159,7 @@ void editor_process_key(Editor *e, EditorKey key)
                     editor_select(e, key);
                 } break;
 
-                default:
-                    assert(0);
+                case EK_COUNT: assert(0);
             }
         } break;
 
@@ -180,7 +183,7 @@ void editor_process_key(Editor *e, EditorKey key)
     }
 }
 
-static_assert(EK_COUNT == 40, "The number of editor keys has changed");
+static_assert(EK_COUNT == 44, "The number of editor keys has changed");
 
 void editor_write(Editor *e, const char *s)
 {
@@ -455,6 +458,20 @@ static void editor_move(Editor *e, EditorKey key)
             e->c.x = editor_get_line_size(e);
         } break;
 
+        case EK_NEXT_EMPTY_LINE: {
+            editor_move(e, EK_DOWN);
+            while (e->c.y + 1 < e->lines.length && editor_get_line_size(e) > 0) {
+                editor_move(e, EK_DOWN);
+            }
+        } break;
+
+        case EK_PREV_EMPTY_LINE: {
+            editor_move(e, EK_UP);
+            while (e->c.y > 0 && editor_get_line_size(e) > 0) {
+                editor_move(e, EK_UP);
+            }
+        } break;
+
         case EK_PAGEUP: {
             // TODO
         } break;
@@ -695,6 +712,7 @@ static void editor_select(Editor *e, EditorKey key)
             {
                 editor_move(e, EK_RIGHT);
                 s = editor_get_line(e); // SLOW
+                slen = strlen(s);
             }
 
             if (*strchrnul("{[(", s[e->c.x]) != '\0') {
@@ -717,7 +735,15 @@ static void editor_select(Editor *e, EditorKey key)
         case EK_SELECT_END: {
             editor_move(e, EK_END);
         } break;
-
+    
+        case EK_SELECT_NEXT_EMPTY_LINE: {
+            editor_move(e, EK_NEXT_EMPTY_LINE);
+        } break;
+        
+        case EK_SELECT_PREV_EMPTY_LINE: {
+            editor_move(e, EK_PREV_EMPTY_LINE);
+        } break;
+        
         case EK_SELECT_ALL: {
             e->cs = vec2uis(0);
             editor_move(e, EK_END);
@@ -728,7 +754,7 @@ static void editor_select(Editor *e, EditorKey key)
     }
 }
 
-static_assert(EK_COUNT == 40, "The number of editor keys has changed");
+static_assert(EK_COUNT == 44, "The number of editor keys has changed");
 
 static void editor_delete_selection(Editor *e)
 {

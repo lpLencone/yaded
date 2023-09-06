@@ -12,12 +12,13 @@
 #include "la.h"
 #include "editor.h"
 #include "gl_extra.h"
+#include "lexer.h"
 
 #include "freetype_renderer.h"
 #include "simple_renderer.h"
 
 #define FONT_SIZE                   64
-    
+
 #define FONT_FILENAME               "fonts/VictorMono-Regular.ttf"
 // #define FONT_FILENAME               "fonts/TSCu_Comic.ttf"
 
@@ -49,10 +50,10 @@ typedef struct {
         Vec2f render_pos;
         float actual_width;
         float render_width;
-        
+
         Vec2f selection_pos;
         float selection_width;
-        
+
         float height;
         size_t last_cx;
         size_t last_cy;
@@ -140,32 +141,6 @@ void init_glew(void)
     }
 }
 
-const int keymap[] = {
-    0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0,
-    SDLK_PAGEUP,
-    SDLK_PAGEDOWN,
-    SDLK_BACKSPACE,
-    SDLK_DELETE,
-    SDLK_TAB,
-};
-
-const size_t keymap_size = sizeof(keymap) / sizeof(keymap[0]);
-
-EditorKey find_move_key(int code) {
-    for (EditorKey ek = EK_LEFT; ek <= EK_PAGEDOWN; ek++) {
-        if (keymap[ek] == code) return ek;
-    }
-    assert(0);
-}
-
-EditorKey find_edit_key(int code) {
-    for (EditorKey ek = EK_BACKSPACE; ek <= EK_TAB; ek++) {
-        if (keymap[ek] == code) return ek;
-    }
-    assert(0);
-}
-
 FT_Face FT_init(void)
 {
 #define ft_check_error                                          \
@@ -202,16 +177,6 @@ void renderers_init(Simple_Renderer *sr, FreeType_Renderer *ftr, FT_Face face)
     }
 }
 
-typedef struct {
-    size_t i;
-    size_t len;
-} Key_Pair;
-
-int key_compare(const void *key1, const void *key2)
-{
-    return ((Key_Pair *) key1)->i - ((Key_Pair *) key2)->i;
-}
-
 void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *ftr,
                    Editor *e, Screen *scr)
 {
@@ -228,44 +193,37 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
     glUniform2f(sr->scale, scr->cam.scale, scr->cam.scale);
     glUniform2f(sr->resolution, w, h);
     float max_line_width = 0;
-    const char *keys[] = {"for ", "if ", "void ", "int ", "#define ", "#include ", "while ", "do ", ";", "const ", "float ", "size_t ", "Vec2f ", "Vec4f "};
     
     Vec2f pos = {0};
-    List keysl = list_init(NULL, key_compare);
     for (size_t cy = 0; cy < e->lines.length; cy++) {
         pos.x = 0.0f;
         pos.y = - (float) cy * (FONT_SIZE);
 
         const char *s = editor_get_line_at(e, cy);
-        const char *needle = NULL;
+        Lexer l = lexer_init(s, strlen(s));
         
-        for (size_t key_i = 0; key_i < sizeof(keys) / sizeof(keys[0]); key_i++) {
-            needle = strstr(s, keys[key_i]);
-            if (needle != NULL) {
-                Key_Pair kpair = {
-                    .i = needle - s,
-                    .len = strlen(keys[key_i])
-                };
-                list_append(&keysl, &kpair, sizeof(kpair));
-            }
-        }
-        list_quicksort(&keysl);
-        
-        Node *cursor = keysl.head;
         size_t last_i = 0;
-        while (cursor != NULL) {
-            Key_Pair *kpair = cursor->data;
-            pos = ftr_render_s_n(ftr, sr, s + last_i, kpair->i - last_i, pos, vec4fs(0.9f));
-            pos = ftr_render_s_n(ftr, sr, s + kpair->i, kpair->len, pos, vec4fs(0.6f));
-            last_i = kpair->i + kpair->len;
-            cursor = cursor->next;
+        Token token = {0};
+        while ((token = lexer_next(&l)).kind != TOKEN_END) {
+            Vec4f color = vec4fs(0.9f);
+            switch (token.kind) {
+                case TOKEN_INVALID: color = vec4f(0.9f, 0.3f, 0.3f, 0.7f); break;
+                case TOKEN_HASH:    color = vec4f(0.5f, 0.3f, 0.6f, 0.9f); break;
+                case TOKEN_SYMBOL:  color = vec4f(0.8f, 0.8f, 0.8f, 1.0f); break;
+                case TOKEN_CHRLIT:
+                case TOKEN_STRLIT:  color = vec4f(0.2f, 1.0f, 0.4f, 1.0f); break;
+                case TOKEN_NUMLIT:  color = vec4f(0.3f, 0.5f, 0.9f, 1.0f); break;
+                case TOKEN_COMMENT: color = vec4f(0.5f, 0.5f, 1.0f, 0.8f); break;
+                case TOKEN_SEMI:    color = vec4fs(0.6f);                  break;
+                default: break;
+            }
+            pos = ftr_render_s_n(ftr, sr, s + last_i, token.len, pos, color);
+            last_i += token.len;
         }
-        pos = ftr_render_s(ftr, sr, s + last_i, pos, vec4fs(0.9f));
+        // pos = ftr_render_s(ftr, sr, s + last_i, pos, vec4fs(0.9f));
 
         float line_width = pos.x / 0.5f;
         if (line_width > max_line_width) max_line_width = line_width;
-
-        list_clear(&keysl);
     }
   
     // Render Cursor
@@ -377,6 +335,7 @@ void cursor_move(Screen *scr, size_t cx, size_t cy)
     scr->cur.last_cy = cy;
 }
 
+
 static FreeType_Renderer ftr = {0};
 static Simple_Renderer sr = {0};
 
@@ -425,14 +384,12 @@ int main(int argc, char *argv[])
                             }
                         } break;
 
-                        case SDLK_PAGEUP:
-                        case SDLK_PAGEDOWN: {
-                            editor_process_key(&e, find_move_key(event.key.keysym.sym));
-                            update_last_moved(&scr);
-                        } break;
-
                         case SDLK_UP: {
-                            if (SDL_SHIFT) {
+                            if (SDL_CTRL && SDL_SHIFT) {
+                                editor_process_key(&e, EK_SELECT_PREV_EMPTY_LINE);
+                            } else if (SDL_CTRL) {
+                                editor_process_key(&e, EK_PREV_EMPTY_LINE);
+                            } else if (SDL_SHIFT) {
                                 editor_process_key(&e, EK_SELECT_UP);
                             } else {
                                 editor_process_key(&e, EK_UP);
@@ -441,7 +398,11 @@ int main(int argc, char *argv[])
                         } break;
 
                         case SDLK_DOWN: {
-                            if (SDL_SHIFT) {
+                            if (SDL_CTRL && SDL_SHIFT) {
+                                editor_process_key(&e, EK_SELECT_NEXT_EMPTY_LINE);
+                            } else if (SDL_CTRL) {
+                                editor_process_key(&e, EK_NEXT_EMPTY_LINE);
+                            } else if (SDL_SHIFT) {
                                 editor_process_key(&e, EK_SELECT_DOWN);
                             } else {
                                 editor_process_key(&e, EK_DOWN);
@@ -501,10 +462,18 @@ int main(int argc, char *argv[])
                             update_last_moved(&scr);
                         } break;
 
-                        case SDLK_BACKSPACE:
-                        case SDLK_DELETE:
+                        case SDLK_BACKSPACE: {
+                            editor_process_key(&e, EK_BACKSPACE);
+                            update_last_moved(&scr);
+                        } break;
+
+                        case SDLK_DELETE: {
+                            editor_process_key(&e, EK_DELETE);
+                            update_last_moved(&scr);
+                        } break;
+
                         case SDLK_TAB: {
-                            editor_process_key(&e, find_edit_key(event.key.keysym.sym));
+                            editor_process_key(&e, EK_TAB);
                             update_last_moved(&scr);
                         } break;
 
@@ -605,7 +574,7 @@ int main(int argc, char *argv[])
                     }
                     scr.state.last_key = event.key.keysym;
                 } break;
-                static_assert(EK_COUNT == 40, "The number of editor keys has changed");
+                static_assert(EK_COUNT == 44, "The number of editor keys has changed");
 
                 case SDL_TEXTINPUT: {
                     editor_write(&e, event.text.text);
@@ -672,4 +641,3 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-
