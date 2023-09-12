@@ -7,6 +7,24 @@
 #include <stdbool.h>
 #include <string.h>
 
+#define consume(n) \
+    do { \
+        token.len += n; \
+        l->cur += n; \
+    } while (0) 
+
+#define lchar l->s[l->cur]
+
+static bool ishex(char c)
+{
+    return (c >= '0' && c <= '9') || (tolower(c) >= 'a' && tolower(c) <= 'f');
+}
+
+static bool isbin(char c)
+{
+    return (c == '0' || c == '1');
+}
+
 typedef struct {
     const char *s[10];
     Token_Kind k;
@@ -18,30 +36,24 @@ static Literal_Token lit_tokens[] = {
     {.s = {                                 NULL}, .k = 0},
 };
 
-Lexer lexer_init(const char *s, size_t len)
+Lexer lexer_init(const char *s, size_t len, const char **keywords)
 {
     Lexer l = {0};
     l.s = s;
     l.len = len;
+    l.keywords = keywords;
     return l;
 }
 
-bool lexer_is_equal_n(Lexer *l, const char *s, size_t n)
+static bool lexer_strneq(Lexer *l, const char *s, size_t n)
 {
-    return (l->cur + n <= l->len && strncmp(&l->s[l->cur], s, n) == 0);
+    return (l->cur + n <= l->len && strncmp(&lchar, s, n) == 0);
 }
-#define lexer_is_equal(l, s) lexer_is_equal_n(l, s, strlen(s))
+#define lexer_streq(l, s) lexer_strneq(l, s, strlen(s))
 
-bool lexer_current_char_in(Lexer *l, const char *s)
+static bool lexer_char_in_str(Lexer *l, const char *s)
 {
-    return (l->cur < l->len && *strchrnul(s, l->s[l->cur]) != '\0');
-}
-
-bool lexer_starts_with(Lexer *l, const char *prefix)
-{
-    assert(l->cur < l->len);
-
-    return lexer_is_equal(l, prefix);
+    return (l->cur < l->len && *strchrnul(s, lchar) != '\0');
 }
 
 static bool is_symbol_start(char c)
@@ -60,110 +72,163 @@ Token lexer_next(Lexer *l)
 
     if (l->cur >= l->len) return token;
 
-    if (l->s[l->cur] == '#') {
+    if (lchar == '#') {
         token.kind = TOKEN_HASH;
         while (l->cur < l->len) {
-            token.len++;
-            l->cur++;
+            consume(1);
 
-            if (l->s[l->cur] == '\n' && 
-                l->s[l->cur - 1] != '\\') break;
-        }
-        if (l->cur < l->len) {
-            l->cur++;
-        }
-        return token;
-    }
-
-    if (lexer_is_equal(l, "//")) {
-        token.kind = TOKEN_COMMENT;
-        while (l->cur < l->len) {
-            token.len++;
-            l->cur++;
-
-            if (l->s[l->cur] == '\n' && 
-                l->s[l->cur - 1] != '\\') break;
-        }
-        if (l->cur < l->len) {
-            l->cur++;
-        }
-        return token;
-    }
-
-    if (isspace(l->s[l->cur])) {
-        token.kind = TOKEN_WHITESPACE;
-        while (isspace(l->s[l->cur])) {
-            l->cur++;
-            token.len++;
-        }
-        return token;
-    }
-
-    if (l->s[l->cur] == '\"') {
-        token.kind = TOKEN_STRLIT;
-        l->cur++;
-        token.len++;
-        while (l->cur < l->len && l->s[l->cur] != '\"') {
-            l->cur++;
-            token.len++;
-            if (l->s[l->cur] == '\"' && l->s[l->cur - 1] == '\\') {
-                l->cur++;
-                token.len++;
+            if (lchar == '\n' && 
+                l->s[l->cur - 1] != '\\')
+            {
+                consume(1);
+                break;
             }
         }
-        l->cur++;
-        token.len++;
-        if (l->cur < l->len) {
-            l->cur++;
+
+        return token;
+    }
+
+    if (lexer_streq(l, "//")) {
+        token.kind = TOKEN_INLINE_COMMENT;
+        while (l->cur < l->len) {
+            consume(1);
+            if (lchar == '\n' && 
+                l->s[l->cur - 1] != '\\') break;
         }
         return token;
     }
 
-    if (is_symbol_start(l->s[l->cur])) {
-        token.kind = TOKEN_SYMBOL;
-        while (l->cur < l->len && is_symbol(l->s[l->cur])) {
-            l->cur++;
-            token.len++;
+    if (lexer_streq(l, "/*")) {
+        token.kind = TOKEN_BLOCK_COMMENT;
+        while (l->cur < l->len) {
+            consume(1);
+
+            if (lexer_streq(l, "*/")) {
+                consume(2);
+                break;
+            }
         }
         return token;
     }
 
-    if (isdigit(l->s[l->cur]) || l->s[l->cur] == '.') {
-        token.kind = TOKEN_NUMLIT;
-        bool has_dot = l->s[l->cur] == '.';
+    if (isspace(lchar)) {
+        token.kind = TOKEN_WHITESPACE;
+        while (isspace(lchar)) {
+            consume(1);
+        }
+        return token;
+    }
 
-        while (l->cur < l->len && (isdigit(l->s[l->cur]) || lexer_current_char_in(l, "."))) {
-            if (lexer_current_char_in(l, ".")) {
-                if (has_dot) {
-                    goto invalid;
+    if (lchar == '\"') {
+        token.kind = TOKEN_STRLIT;
+
+        while (l->cur < l->len && lchar != '\n') {
+            consume(1);
+            if (lchar == '\"' && l->s[l->cur - 1] != '\\') {
+                consume(1);
+                break;
+            }
+        }
+        return token;
+    }
+
+    if (lchar == '\'') {
+        token.kind = TOKEN_CHRLIT;
+
+        while (l->cur < l->len && lchar != '\n') {
+            consume(1);
+            if (lchar == '\'' && l->s[l->cur - 1] != '\\') {
+                consume(1);
+                break;
+            }
+        }
+        return token;
+    }
+
+    if (is_symbol_start(lchar)) {
+        if (l->keywords != NULL) {
+            for (size_t i = 0; l->keywords[i] != NULL; i++) {
+                if (lexer_streq(l, l->keywords[i])) {
+                    size_t klen = strlen(l->keywords[i]);
+                    if (l->cur + klen > l->len || is_symbol(l->s[l->cur + klen])) break;
+                    token.kind = TOKEN_KEYWORD;
+                    token.len = klen;
+                    l->cur += klen;
+                    return token;
                 }
-                else {
+            }
+        }
+        token.kind = TOKEN_SYMBOL;
+        while (l->cur < l->len && is_symbol(lchar)) {
+            consume(1);
+        }
+        return token;
+    }
+
+    if (isdigit(lchar) || lchar == '.') {
+        token.kind = TOKEN_NUMLIT;
+        bool has_dot = lchar == '.';
+
+        if (lchar == '0') {
+            if (l->cur + 1 < l->len && tolower(l->s[l->cur + 1]) == 'x') {
+                consume(2);
+                
+                if (l->cur >= l->len || !ishex(lchar)) {
+                    goto invalid_consume;
+                }
+
+                while (l->cur < l->len && ishex(lchar)) {
+                    consume(1);
+                }
+                if (is_symbol(lchar) || lchar == '.') {
+                    goto invalid_consume;
+                }
+                return token;
+
+            } else if (l->cur + 1 < l->len && tolower(l->s[l->cur + 1]) == 'b') {
+                consume(2);
+
+                if (l->cur >= l->len || !isbin(lchar)) {
+                    goto invalid_consume;
+                }
+
+                while (l->cur < l->len && isbin(lchar)) {
+                    consume(1);
+                }
+                if (l->cur < l->len && is_symbol(lchar) || lchar == '.') {
+                    goto invalid_consume;
+                }
+                return token;
+            }
+        }
+
+        while (l->cur < l->len && (isdigit(lchar) || lexer_char_in_str(l, "."))) {
+            if (lexer_char_in_str(l, ".")) {
+                if (has_dot) {
+                    goto invalid_consume;
+                } else {
                     has_dot = true;
                 }
             }
-            token.len++;
-            l->cur++;
+            consume(1);
         }
         
         if (!has_dot) {
-            if (lexer_current_char_in(l, "LUlu")) {
-                token.len++;
-                l->cur++;
-                if (lexer_current_char_in(l, "LUlu")) {
-                    token.len++;
-                    l->cur++;
+            if (lexer_char_in_str(l, "LUlu")) {
+                consume(1);
+                if (lexer_char_in_str(l, "LUlu")) {
+                    consume(1);
                 }
-            } 
-            if (l->cur < l->len && is_symbol(l->s[l->cur])) {
-                goto invalid;
+            }
+            if (l->cur < l->len && is_symbol(lchar)) {
+                goto invalid_consume;
             }
         } else {
-            if (lexer_current_char_in(l, "LFlf")) {
-                token.len++;
-                l->cur++;
-            } 
-            if (l->cur < l->len && is_symbol(l->s[l->cur])) {
-                goto invalid;
+            if (lexer_char_in_str(l, "LFlf")) {
+                consume(1);
+            }
+            if (l->cur < l->len && is_symbol(lchar)) {
+                goto invalid_consume;
             }
         }
 
@@ -172,21 +237,19 @@ Token lexer_next(Lexer *l)
 
     for (size_t i = 0; lit_tokens[i].k != 0; i++) {
         for (size_t j = 0; lit_tokens[i].s[j] != NULL; j++) {
-            // NOTE: There cannot be newlines inside of tokens
-            if (lexer_starts_with(l, lit_tokens[i].s[j])) {
+            // NOTE: There cannot be newlines inside of literal tokens
+            if (lexer_streq(l, lit_tokens[i].s[j])) {
                 size_t len = strlen(lit_tokens[i].s[j]);
                 token.kind = lit_tokens[i].k;
-                token.len = len;
-                l->cur += len;
+                consume(len);
                 return token;
             }
         }
     }
 
-invalid:
-l->cur++;
+invalid_consume:
+    consume(1);
     token.kind = TOKEN_INVALID;
-    token.len++;
 
     return token;
 }

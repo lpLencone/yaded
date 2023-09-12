@@ -19,14 +19,14 @@ float map01(float x) {
 vec2 camera_project(vec2 point) 
 {
     vec2 cam_uv = vec2(float(gl_VertexID & 1), float((gl_VertexID >> 1) & 1));
-    float lsd = 0.975 + map01(
-        sin(2 * (
-            sin(map01(cos(time)) * (1.0 + cam_uv.x)) + 
-            cos(map01(sin(time)) * (1.0 + cam_uv.y))
-        ))
-    ) / 20.0;
+    // float lsd = 0.975 + map01(
+    //     sin(2 * (
+    //         sin(map01(cos(time)) * (1.0 + cam_uv.x)) + 
+    //         cos(map01(sin(time)) * (1.0 + cam_uv.y))
+    //     ))
+    // ) / 20.0;
 
-    return 2.0 * (point - camera) * scale * lsd / resolution;
+    return 2.0 * (point - camera) * scale / resolution;
 }
 
 

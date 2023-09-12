@@ -7,7 +7,10 @@
 
 #ifndef debug_print
 #include <stdio.h>
-#define debug_print printf("%20s : %4d : %-20s\n", __FILE__, __LINE__, __func__);
+#define debug_print printf("%15s : %4d : %-20s ", __FILE__, __LINE__, __func__);
+#endif
+#ifndef debug_println
+#define debug_println debug_print puts("");
 #endif
 
 #ifndef DA_INIT_CAPACITY
@@ -41,11 +44,11 @@
         memcpy((da)->data, d, n * TYPESIZE(da)); \
     } while (0) \
 
-#define da_make_zero(da, t) \
+#define da_var_zero(da, t) \
     da_var(da, t); \
     da_zero(&da)
 
-#define da_make(da, t, d, n) \
+#define da_var_init(da, t, d, n) \
     da_var(da, t); \
     da_init(&da, d, n)
 
@@ -115,7 +118,7 @@
 
 #define da_get_copy_n(da, copybuf, from, n) \
     do { \
-        copybuf = calloc(from + n, TYPESIZE(da)); \
+        copybuf = calloc(n, TYPESIZE(da)); \
         memcpy(copybuf, &((da)->data[from]), n * TYPESIZE(da)); \
     } while (0)
 #define da_get_copy(da, copybuf) da_get_copy_n(da, copybuf, 0, (da)->size)

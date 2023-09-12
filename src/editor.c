@@ -38,7 +38,7 @@ static void editor_delete_selection(Editor *e);
 static void editor_copy_selection(Editor *e);
 #define editor_paste(e) editor_write(e, e->clipboard);
 
-const char *get_pathname_cstr(const List *pathname);
+static const char *get_pathname_cstr(const List *pathname);
 static void update_pathname(List *pathname, const char *path);
 
 static void line_dealloc(void *line);
@@ -60,7 +60,7 @@ Editor editor_init(const char *pathname)
         list_append(&e.pathname, path, strlen(path) + 1);
         path = strtok_r(save_ptr, "/", &save_ptr);
     }
-    
+
     e.lines = list_init(line_dealloc, line_compare);
     e.mode = EM_EDITING;
 
@@ -225,6 +225,27 @@ void editor_write(Editor *e, const char *s)
     }
 }
 
+const char *editor_get_data(const Editor *e)
+{
+    da_var_zero(data, char);
+
+    for (int cy = 0; cy < (int) e->lines.length; cy++) {
+        const char *s = editor_get_line_at(e, cy);
+        da_append_n(&data, s, strlen(s));
+        if (cy + 1 != (int) e->lines.length) {
+            da_append(&data, "\n");
+        }
+    }
+
+    da_append(&data, "\0");
+
+    char *s;
+    da_get_copy(&data, s);
+    da_end(&data);
+
+    return s;
+}
+
 size_t editor_get_line_size(const Editor *e)
 {
     const Line *line = list_get(&e->lines, e->c.y);
@@ -249,7 +270,7 @@ char *editor_retrieve_selection(const Editor *e)
         csend = temp;
     }
 
-    da_make_zero(selectbuf, char);
+    da_var_zero(selectbuf, char);
     for (int cy = csbegin.y; cy <= (int) csend.y; cy++) {
         const char *s = editor_get_line_at(e, cy);
         size_t slen = strlen(s);
@@ -288,7 +309,7 @@ void editor_remove_line_at(Editor *e, size_t at)
 
 void editor_merge_line_at(Editor *e, size_t at)
 {
-    assert (at + 1 < e->lines.length);
+    assert(at + 1 < e->lines.length);
 
     Line *line       = list_get(&e->lines, at);
     Line *line_after = list_get(&e->lines, at + 1);
@@ -318,20 +339,24 @@ void editor_new_line_at(Editor *e, const char *s, size_t at)
 
 /* Editor Operations */
 
-void editor_delete_char_at(Editor *e, Vec2ui at)
+Vec2ui editor_delete_char_at(Editor *e, Vec2ui at)
 {
     Line *line = list_get(&e->lines, at.y);
     if (at.y + 1 >= e->lines.length &&
         at.x >= line->size) 
     {
-        return;
+        return at;
     }
 
+    if (at.x > line->size) at.x = line->size;
+
     if (at.x == line->size) {
-        editor_merge_line(e);
+        editor_merge_line_at(e, at.y);
     } else {
         line_delete_char(line, at.x);
     }
+
+    return at;
 }
 
 static void editor_move(Editor *e, EditorKey key)
@@ -492,12 +517,12 @@ static void editor_edit(Editor *e, EditorKey key)
             if (e->mode == EM_SELECTION) return;
             if (e->c.y == 0 && e->c.x == 0) return;
             editor_move(e, EK_LEFT);
-            editor_delete_char(e);
+            e->c = editor_delete_char(e);
         } break;
 
         case EK_DELETE: {
             if (e->mode == EM_SELECTION) return;
-            editor_delete_char(e);
+            e->c = editor_delete_char(e);
         } break;
 
         case EK_TAB: {
@@ -605,7 +630,7 @@ static void find_scope_end(Editor *e)
     size_t slen = strlen(s);
 
     size_t scope = 1;
-    while (scope > 0 && (e->c.x < slen || e->c.y < e->lines.length)) {
+    while (scope > 0 && (e->c.x < slen || e->c.y + 1 < e->lines.length)) {
         editor_move(e, EK_RIGHT);
         s = editor_get_line(e); // SLOW
 
@@ -910,7 +935,7 @@ static void open_dir(Editor *e, const char *dirname)
     list_quicksort(&e->lines);
 }
 
-const char *get_pathname_cstr(const List *pathname)
+static const char *get_pathname_cstr(const List *pathname)
 {
     if (pathname->length == 0) {
         return "/";

@@ -19,8 +19,8 @@
 
 #define FONT_SIZE                   64
 
-#define FONT_FILENAME               "fonts/VictorMono-Regular.ttf"
 // #define FONT_FILENAME               "fonts/TSCu_Comic.ttf"
+#define FONT_FILENAME               "fonts/iosevka-custom-regular.ttf"
 
 #define CUR_INIT_WIDTH              5.0f
 #define CUR_MOVE_VEL                20.0f
@@ -87,7 +87,7 @@ void *scp(void *ptr)
 
 void MessageCallback(
     GLenum source, GLenum type, GLuint id, GLenum severity,
-    GLsizei length, const GLchar* message, const void* userParam)
+    GLsizei length, const GLchar* message, const void *userParam)
 {
     (void) source;
     (void) id;
@@ -166,6 +166,24 @@ FT_Face FT_init(void)
 #undef ft_check_error
 }
 
+static Vec4f hex_to_vec4f(uint32_t color)
+{
+    // 0xRRGGBBAA
+    uint32_t r = (color >> (3 * 8)) & 0xFF;
+    uint32_t g = (color >> (2 * 8)) & 0xFF;
+    uint32_t b = (color >> (1 * 8)) & 0xFF;
+    uint32_t a = (color >> (0 * 8)) & 0xFF;
+    return vec4f(r / 255.0f, g / 255.0f, b / 255.0f, a / 255.0f);
+}
+
+static const char *keywords[] = {
+    "float", "double", "int", "short", "long", "void", "char", "const",
+    "unsigned", "size_t", "ssize_t", "typedef", "struct", "return", "if", 
+    "for", "while", "do",
+    
+    NULL
+};
+
 void renderers_init(Simple_Renderer *sr, FreeType_Renderer *ftr, FT_Face face)
 {
     ftr_init(ftr, face);
@@ -180,6 +198,11 @@ void renderers_init(Simple_Renderer *sr, FreeType_Renderer *ftr, FT_Face face)
 void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *ftr,
                    Editor *e, Screen *scr)
 {
+    Vec4f bg = hex_to_vec4f(0x181818FF);
+
+    glClearColor(bg.x, bg.y, bg.z, bg.w);
+    glClear(GL_COLOR_BUFFER_BIT);
+
     // TODO: set viewport only on window change
     int w, h;
     SDL_GetWindowSize(window, &w, &h);
@@ -193,39 +216,48 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
     glUniform2f(sr->scale, scr->cam.scale, scr->cam.scale);
     glUniform2f(sr->resolution, w, h);
     float max_line_width = 0;
-    
+
+    const char *data = editor_get_data(e);
+
     Vec2f pos = {0};
-    for (size_t cy = 0; cy < e->lines.length; cy++) {
-        pos.x = 0.0f;
-        pos.y = - (float) cy * (FONT_SIZE);
+    float line_width = 0;
+    Lexer l = lexer_init(data, strlen(data), keywords);
+    
+    size_t last_i = 0;
+    Token token = {0};
 
-        const char *s = editor_get_line_at(e, cy);
-        Lexer l = lexer_init(s, strlen(s));
-        
-        size_t last_i = 0;
-        Token token = {0};
-        while ((token = lexer_next(&l)).kind != TOKEN_END) {
-            Vec4f color = vec4fs(0.9f);
-            switch (token.kind) {
-                case TOKEN_INVALID: color = vec4f(0.9f, 0.3f, 0.3f, 0.7f); break;
-                case TOKEN_HASH:    color = vec4f(0.5f, 0.3f, 0.6f, 0.9f); break;
-                case TOKEN_SYMBOL:  color = vec4f(0.8f, 0.8f, 0.8f, 1.0f); break;
-                case TOKEN_CHRLIT:
-                case TOKEN_STRLIT:  color = vec4f(0.2f, 1.0f, 0.4f, 1.0f); break;
-                case TOKEN_NUMLIT:  color = vec4f(0.3f, 0.5f, 0.9f, 1.0f); break;
-                case TOKEN_COMMENT: color = vec4f(0.5f, 0.5f, 1.0f, 0.8f); break;
-                case TOKEN_SEMI:    color = vec4fs(0.6f);                  break;
-                default: break;
-            }
-            pos = ftr_render_s_n(ftr, sr, s + last_i, token.len, pos, color);
-            last_i += token.len;
+    while ((token = lexer_next(&l)).kind != TOKEN_END) {
+        Vec4f color;
+        switch (token.kind) {
+            case TOKEN_BLOCK_COMMENT:
+            case TOKEN_INLINE_COMMENT: 
+                                color = hex_to_vec4f(0x905425FF); break;
+            case TOKEN_CHRLIT:
+            case TOKEN_STRLIT:  color = hex_to_vec4f(0xCFB5A0FF); break;
+            case TOKEN_HASH:    color = hex_to_vec4f(0x9A9AA0FF); break;
+            case TOKEN_SYMBOL:  color = hex_to_vec4f(0xCFCFCFFF); break;
+            case TOKEN_NUMLIT:  color = hex_to_vec4f(0x90EE90FF); break;
+            case TOKEN_KEYWORD: color = hex_to_vec4f(0xDFDF45FF); break;
+            case TOKEN_INVALID: color = hex_to_vec4f(0xAA4554FF); break;
+            default: color = hex_to_vec4f(0xCFCFCFFF); break;
         }
-        // pos = ftr_render_s(ftr, sr, s + last_i, pos, vec4fs(0.9f));
 
-        float line_width = pos.x / 0.5f;
+        for (size_t i = 0; i < token.len; i++) {
+            if (data[last_i + i] == '\n') {
+                line_width = pos.x / 0.5f;
+
+                pos.y -= (float) FONT_SIZE;
+                pos.x = 0;
+            } else {
+                pos = ftr_render_s_n(ftr, sr, data + last_i + i, 1, pos, color);
+                line_width = pos.x / 0.5f;
+            }
+        }
+        last_i += token.len;
+
         if (line_width > max_line_width) max_line_width = line_width;
     }
-  
+
     // Render Cursor
     sr_set_shader(sr, SHADER_COLOR);
 
@@ -623,10 +655,6 @@ int main(int argc, char *argv[])
             vec2f_mul(scr.cam.vel, vec2fs(DELTA_TIME))
         );
 
-        // Draw
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-
         renderer_draw(window, &sr, &ftr, &e, &scr);
 
         const Uint32 duration = (SDL_GetTicks() - start);
@@ -641,3 +669,4 @@ int main(int argc, char *argv[])
 
     return 0;
 }
+
