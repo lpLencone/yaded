@@ -17,7 +17,7 @@
 #include "freetype_renderer.h"
 #include "simple_renderer.h"
 
-#define FONT_SIZE                   64
+#define FONT_SIZE                   128
 
 // #define FONT_FILENAME               "fonts/TSCu_Comic.ttf"
 #define FONT_FILENAME               "fonts/iosevka-custom-regular.ttf"
@@ -25,8 +25,11 @@
 #define CUR_INIT_WIDTH              5.0f
 #define CUR_MOVE_VEL                20.0f
 #define CUR_BLINK_VEL               6.0f
-#define CAM_FINAL_SCALE             0.5f
-#define CAM_INIT_SCALE              1.8f
+
+#define CAM_MOVE_VEL                2.5f
+#define CAM_SCALE_VEL               3.0f
+#define CAM_FINAL_SCALE             0.25f
+#define CAM_INIT_SCALE              0.75f
 
 #define SCREEN_WIDTH                800
 #define SCREEN_HEIGHT               600
@@ -198,15 +201,16 @@ void renderers_init(Simple_Renderer *sr, FreeType_Renderer *ftr, FT_Face face)
 void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *ftr,
                    Editor *e, Screen *scr)
 {
+    // Set background color
     Vec4f bg = hex_to_vec4f(0x181818FF);
 
     glClearColor(bg.x, bg.y, bg.z, bg.w);
     glClear(GL_COLOR_BUFFER_BIT);
 
     // TODO: set viewport only on window change
-    int w, h;
-    SDL_GetWindowSize(window, &w, &h);
-    glViewport(0, 0, w, h);
+    int scr_width, scr_height;
+    SDL_GetWindowSize(window, &scr_width, &scr_height);
+    glViewport(0, 0, scr_width, scr_height);
 
     // Render Glyphs
     sr_set_shader(sr, SHADER_TEXT);
@@ -214,7 +218,7 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
     glUniform1f(sr->time, (float) SDL_GetTicks() / 1000.0f);
     glUniform2f(sr->camera, scr->cam.pos.x, -scr->cam.pos.y);
     glUniform2f(sr->scale, scr->cam.scale, scr->cam.scale);
-    glUniform2f(sr->resolution, w, h);
+    glUniform2f(sr->resolution, scr_width, scr_height);
     float max_line_width = 0;
 
     const char *data = editor_get_data(e);
@@ -233,7 +237,7 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
             case TOKEN_INLINE_COMMENT: 
                                 color = hex_to_vec4f(0x905425FF); break;
             case TOKEN_CHRLIT:
-            case TOKEN_STRLIT:  color = hex_to_vec4f(0xCFB5A0FF); break;
+            case TOKEN_STRLIT:  color = hex_to_vec4f(0xAA8A60FF); break;
             case TOKEN_HASH:    color = hex_to_vec4f(0x9A9AA0FF); break;
             case TOKEN_SYMBOL:  color = hex_to_vec4f(0xCFCFCFFF); break;
             case TOKEN_NUMLIT:  color = hex_to_vec4f(0x90EE90FF); break;
@@ -244,13 +248,13 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
 
         for (size_t i = 0; i < token.len; i++) {
             if (data[last_i + i] == '\n') {
-                line_width = pos.x / 0.5f;
+                line_width = pos.x;
 
                 pos.y -= (float) FONT_SIZE;
                 pos.x = 0;
             } else {
                 pos = ftr_render_s_n(ftr, sr, data + last_i + i, 1, pos, color);
-                line_width = pos.x / 0.5f;
+                line_width = pos.x;
             }
         }
         last_i += token.len;
@@ -264,7 +268,7 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
     glUniform1f(sr->time, (float) SDL_GetTicks() / 1000.0f);
     glUniform2f(sr->camera, scr->cam.pos.x, -scr->cam.pos.y);
     glUniform2f(sr->scale, scr->cam.scale, scr->cam.scale);
-    glUniform2f(sr->resolution, w, h);
+    glUniform2f(sr->resolution, scr_width, scr_height);
 
     switch (e->mode) {
         case EM_EDITING:
@@ -342,17 +346,43 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
 
     sr_flush(sr);
 
-    // Update camera scale
 
-    float target_scale = SCREEN_WIDTH / max_line_width; 
+
+    // Update camera
+
+    const float cam_x_start_limit = (max_line_width < 0.4f * scr_width / scr->cam.scale)
+        ? max_line_width
+        : 0.4f * scr_width / scr->cam.scale; // 1/10 of scr_width from left edge (1/2 - 1/10 = 2/5)
+
+    const float cam_x_end_limit = max_line_width - 0.3f * scr_width / scr->cam.scale; // 1/5 from right edge (1/5 - 1/2 = -3/10)
+
+    Vec2f cam_focus_pos = scr->cur.render_pos;
+
+    if (cam_focus_pos.x > cam_x_end_limit) {
+        cam_focus_pos.x = cam_x_end_limit;
+    }
+    if (cam_focus_pos.x < cam_x_start_limit) {
+        cam_focus_pos.x = cam_x_start_limit;
+    }
+
+    scr->cam.vel = vec2f_mul(
+        vec2f_sub(cam_focus_pos, scr->cam.pos), 
+        vec2fs(CAM_MOVE_VEL)
+    );
+    scr->cam.pos = vec2f_add(
+        scr->cam.pos, 
+        vec2f_mul(scr->cam.vel, vec2fs(DELTA_TIME))
+    );
+
+    float target_scale = 0.5f * scr_width / max_line_width; 
 
     if (target_scale > CAM_INIT_SCALE) {
         target_scale = CAM_INIT_SCALE;
     } else if (target_scale < CAM_FINAL_SCALE) {
         target_scale = CAM_FINAL_SCALE;
     }
-    
-    scr->cam.scale_vel = 2.0f * (target_scale - scr->cam.scale);
+
+    scr->cam.scale_vel = CAM_SCALE_VEL * (target_scale - scr->cam.scale);
     scr->cam.scale += scr->cam.scale_vel * DELTA_TIME;
 }
 
@@ -602,7 +632,7 @@ int main(int argc, char *argv[])
                                 SDL_SetClipboardText(editor_retrieve_selection(&e));
                                 editor_process_key(&e, EK_CUT);
                             }
-                        }
+                        } break;
                     }
                     scr.state.last_key = event.key.keysym;
                 } break;
@@ -643,16 +673,6 @@ int main(int argc, char *argv[])
         scr.cur.render_pos = vec2f_sub(
             scr.cur.render_pos,
             vec2f_mul(scr.cur.vel, vec2fs(DELTA_TIME))
-        );
-
-        // Update camera position on the screen
-        scr.cam.vel = vec2f_mul(
-            vec2f_sub(scr.cur.render_pos, scr.cam.pos), 
-            vec2fs(2.0f)
-        );
-        scr.cam.pos = vec2f_add(
-            scr.cam.pos, 
-            vec2f_mul(scr.cam.vel, vec2fs(DELTA_TIME))
         );
 
         renderer_draw(window, &sr, &ftr, &e, &scr);

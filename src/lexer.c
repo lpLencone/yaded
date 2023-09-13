@@ -195,7 +195,7 @@ Token lexer_next(Lexer *l)
                 while (l->cur < l->len && isbin(lchar)) {
                     consume(1);
                 }
-                if (l->cur < l->len && is_symbol(lchar) || lchar == '.') {
+                if (l->cur < l->len && (is_symbol(lchar) || lchar == '.')) {
                     goto invalid_consume;
                 }
                 return token;
