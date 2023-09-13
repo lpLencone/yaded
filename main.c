@@ -633,6 +633,10 @@ int main(int argc, char *argv[])
                                 editor_process_key(&e, EK_CUT);
                             }
                         } break;
+
+                        case SDLK_F5: {
+                            sr_reload_shaders(&sr);
+                        } break;
                     }
                     scr.state.last_key = event.key.keysym;
                 } break;

@@ -24,7 +24,11 @@ static_assert(SHADER_COUNT == 4, "The amount of shaders has changed");
 void sr_init(Simple_Renderer *sr) 
 {
     setup_vertices_and_buffers(sr);
+    sr_load_shaders(sr);
+}
 
+void sr_load_shaders(Simple_Renderer *sr)
+{
     GLuint shaders[2];
     compile_shader(vert_shader_filename, GL_VERTEX_SHADER, &shaders[0]);
     for (size_t shader_i = 0; shader_i < SHADER_COUNT; shader_i++) {
