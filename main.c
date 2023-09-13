@@ -28,8 +28,8 @@
 
 #define CAM_MOVE_VEL                2.5f
 #define CAM_SCALE_VEL               3.0f
-#define CAM_FINAL_SCALE             0.25f
-#define CAM_INIT_SCALE              0.75f
+#define CAM_FINAL_SCALE             0.2f
+#define CAM_INIT_SCALE              0.80f
 
 #define SCREEN_WIDTH                800
 #define SCREEN_HEIGHT               600
@@ -644,7 +644,9 @@ int main(int argc, char *argv[])
                         } break;
 
                         case SDLK_F5: {
-                            sr_load_shaders(&sr);
+                            if (sr_load_shaders(&sr)) {
+                                printf("Reloaded shaders successfully\n");
+                            }
                         } break;
                     }
                     scr.state.last_key = event.key.keysym;
