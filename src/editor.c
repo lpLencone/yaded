@@ -34,8 +34,8 @@ static void editor_move(Editor *e, EditorKey key);
 static void editor_edit(Editor *e, EditorKey key);
 static void editor_action(Editor *e, EditorKey key);
 static void editor_select(Editor *e, EditorKey key);
-static void editor_delete_selection(Editor *e);
-static void editor_copy_selection(Editor *e);
+static void editor_selection_delete(Editor *e);
+static void editor_selection_copy(Editor *e);
 #define editor_paste(e) editor_write(e, e->clipboard);
 
 static const char *get_pathname_cstr(const List *pathname);
@@ -122,7 +122,7 @@ void editor_process_key(Editor *e, EditorKey key)
                 case EK_BREAK_LINE:
                 case EK_TAB: {
                     if (e->mode == EM_SELECTION) {
-                        editor_delete_selection(e);
+                        editor_selection_delete(e);
                     }
                     editor_edit(e, key);
                     e->mode = EM_EDITING;
@@ -191,7 +191,7 @@ void editor_write(Editor *e, const char *s)
         return;
     }
     if (e->mode == EM_SELECTION) {
-        editor_delete_selection(e);
+        editor_selection_delete(e);
         e->mode = EM_EDITING;
     }
 
@@ -225,7 +225,7 @@ void editor_write(Editor *e, const char *s)
     }
 }
 
-const char *editor_get_data(const Editor *e)
+char *editor_get_data(const Editor *e)
 {
     da_var_zero(data, char);
 
@@ -567,7 +567,7 @@ static void editor_action(Editor *e, EditorKey key)
         } break;
 
         case EK_COPY: {
-            editor_copy_selection(e);
+            editor_selection_copy(e);
         } break;
 
         case EK_PASTE: {
@@ -575,8 +575,8 @@ static void editor_action(Editor *e, EditorKey key)
         } break;
 
         case EK_CUT: {
-            editor_copy_selection(e);
-            editor_delete_selection(e);
+            editor_selection_copy(e);
+            editor_selection_delete(e);
         } break;
 
         default:
@@ -781,7 +781,7 @@ static void editor_select(Editor *e, EditorKey key)
 
 static_assert(EK_COUNT == 44, "The number of editor keys has changed");
 
-static void editor_delete_selection(Editor *e)
+static void editor_selection_delete(Editor *e)
 {
     assert(e->mode == EM_SELECTION);
 
@@ -820,7 +820,7 @@ static void editor_delete_selection(Editor *e)
     }
 }
 
-static void editor_copy_selection(Editor *e)
+static void editor_selection_copy(Editor *e)
 {
     if (e->clipboard != NULL) {
         free(e->clipboard);

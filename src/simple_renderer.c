@@ -29,6 +29,10 @@ void sr_init(Simple_Renderer *sr)
 
 void sr_load_shaders(Simple_Renderer *sr)
 {
+    for (size_t i = 0; i < SHADER_COUNT; i++) {
+        glDeleteProgram(sr->programs[i]);
+    }
+    
     GLuint shaders[2];
     compile_shader(vert_shader_filename, GL_VERTEX_SHADER, &shaders[0]);
     for (size_t shader_i = 0; shader_i < SHADER_COUNT; shader_i++) {
@@ -39,7 +43,9 @@ void sr_load_shaders(Simple_Renderer *sr)
         if (!link_program(sr->programs[sr->current_shader])) {
             exit(1);
         }
+        glDeleteShader(shaders[1]);
     }
+    glDeleteShader(shaders[0]);
 }
 
 void sr_set_shader(Simple_Renderer *sr, Shader_Enum shader)

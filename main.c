@@ -610,19 +610,28 @@ int main(int argc, char *argv[])
 
                         case SDLK_c: {
                             if (SDL_CTRL && e.mode == EM_SELECTION) {
-                                SDL_SetClipboardText(editor_retrieve_selection(&e));
+                                scc(SDL_SetClipboardText(editor_retrieve_selection(&e)));
                                 editor_process_key(&e, EK_COPY);
                             }
                         } break;
 
                         case SDLK_v: {
-                            if (e.clipboard == NULL || (SDL_HasClipboardText() && 
-                                                        strcmp(e.clipboard, SDL_GetClipboardText()) != 0))
-                            {
-                                e.clipboard = SDL_GetClipboardText();
-                            }
-                            if (SDL_CTRL && e.clipboard != NULL) {
-                                editor_process_key(&e, EK_PASTE);
+                            if (SDL_CTRL) {
+                                if (e.clipboard == NULL && SDL_HasClipboardText()) {
+                                    char *s = SDL_GetClipboardText();
+                                    if (s[0] == '\0') {
+                                        fprintf(stderr, "SDL ERROR: %s\n", SDL_GetError());
+                                        SDL_free(s);
+                                    } else {
+                                        if (e.clipboard != NULL) free(e.clipboard);
+                                        e.clipboard = s;
+                                    }
+
+                                } 
+
+                                if (e.clipboard != NULL) {
+                                    editor_process_key(&e, EK_PASTE);
+                                }
                             }
                             update_last_moved(&scr);
                         } break;
@@ -635,7 +644,7 @@ int main(int argc, char *argv[])
                         } break;
 
                         case SDLK_F5: {
-                            sr_reload_shaders(&sr);
+                            sr_load_shaders(&sr);
                         } break;
                     }
                     scr.state.last_key = event.key.keysym;

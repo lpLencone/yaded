@@ -92,7 +92,7 @@ void editor_remove_line_at(Editor *e, size_t at);
 void editor_merge_line_at(Editor *e, size_t at);
 void editor_break_line_at(Editor *e, size_t at);
 
-const char *editor_get_data(const Editor *e);
+char *editor_get_data(const Editor *e);
 size_t editor_get_line_size(const Editor *e);
 #define editor_get_line(e) editor_get_line_at(e, (e)->c.y)
 const char *editor_get_line_at(const Editor *e, size_t at);
