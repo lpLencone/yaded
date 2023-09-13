@@ -24,28 +24,47 @@ static_assert(SHADER_COUNT == 4, "The amount of shaders has changed");
 void sr_init(Simple_Renderer *sr) 
 {
     setup_vertices_and_buffers(sr);
-    sr_load_shaders(sr);
+    if (!sr_load_shaders(sr)) exit(1);
 }
 
-void sr_load_shaders(Simple_Renderer *sr)
+bool sr_load_shaders(Simple_Renderer *sr)
 {
-    for (size_t i = 0; i < SHADER_COUNT; i++) {
-        glDeleteProgram(sr->programs[i]);
-    }
-    
+    GLuint programs[SHADER_COUNT];
     GLuint shaders[2];
     compile_shader(vert_shader_filename, GL_VERTEX_SHADER, &shaders[0]);
-    for (size_t shader_i = 0; shader_i < SHADER_COUNT; shader_i++) {
-        compile_shader(frag_shader_filenames[shader_i], GL_FRAGMENT_SHADER, &shaders[1]);
+    
+    bool failure;
+    size_t shader_i;
+    for (shader_i = 0; shader_i < SHADER_COUNT; shader_i++) {
+        if (!compile_shader(frag_shader_filenames[shader_i], 
+                            GL_FRAGMENT_SHADER, &shaders[1])) 
+        {
+            failure = true; 
+        }
         sr->current_shader = shader_i;
-        sr->programs[sr->current_shader] = glCreateProgram();
-        attach_shaders(sr->programs[sr->current_shader], shaders, 2);
-        if (!link_program(sr->programs[sr->current_shader])) {
-            exit(1);
+        programs[sr->current_shader] = glCreateProgram();
+        attach_shaders(programs[sr->current_shader], shaders, 2);
+        if (!link_program(programs[sr->current_shader])) {
+            failure = true; 
         }
         glDeleteShader(shaders[1]);
+        
+        if (failure) break;
     }
     glDeleteShader(shaders[0]);
+
+    if (failure) {
+        for (size_t i = 0; i < shader_i; i++) {
+            glDeleteProgram(programs[i]);
+        }
+    } else {
+        for (size_t i = 0; i < SHADER_COUNT; i++) {
+            glDeleteProgram(sr->programs[i]);
+            sr->programs[i] = programs[i];
+        }
+    }
+
+    return !failure;
 }
 
 void sr_set_shader(Simple_Renderer *sr, Shader_Enum shader)

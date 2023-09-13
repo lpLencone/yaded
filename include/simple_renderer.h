@@ -49,7 +49,7 @@ typedef struct {
 } Simple_Renderer;
 
 void sr_init(Simple_Renderer *sr);
-void sr_load_shaders(Simple_Renderer *sr);
+bool sr_load_shaders(Simple_Renderer *sr);
 
 void sr_set_shader(Simple_Renderer *sr, Shader_Enum shader);
 
