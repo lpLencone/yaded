@@ -122,7 +122,7 @@ Token lexer_next(Lexer *l)
     if (lchar == '\"') {
         token.kind = TOKEN_STRLIT;
 
-        while (l->cur < l->len && lchar != '\n') {
+        while (l->cur < l->len) {
             consume(1);
             if (lchar == '\"' && l->s[l->cur - 1] != '\\') {
                 consume(1);
@@ -250,6 +250,5 @@ Token lexer_next(Lexer *l)
 invalid_consume:
     consume(1);
     token.kind = TOKEN_INVALID;
-
     return token;
 }

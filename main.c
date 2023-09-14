@@ -20,7 +20,7 @@
 #define FONT_SIZE                   128
 
 // #define FONT_FILENAME               "fonts/TSCu_Comic.ttf"
-#define FONT_FILENAME               "fonts/iosevka-custom-regular.ttf"
+#define FONT_FILENAME               "fonts/iosevka-cool-regular.ttf"
 
 #define CUR_INIT_WIDTH              5.0f
 #define CUR_MOVE_VEL                20.0f
@@ -212,25 +212,31 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
     SDL_GetWindowSize(window, &scr_width, &scr_height);
     glViewport(0, 0, scr_width, scr_height);
 
+    for (Shader_Enum shader = 0; shader < SHADER_COUNT; shader++) {
+        sr_set_shader(sr, shader);
+        glUniform1f(sr->time, (float) SDL_GetTicks() / 1000.0f);
+        glUniform2f(sr->camera, scr->cam.pos.x, -scr->cam.pos.y);
+        glUniform2f(sr->scale, scr->cam.scale, scr->cam.scale);
+        glUniform2f(sr->resolution, scr_width, scr_height);
+    }
+
     // Render Glyphs
     sr_set_shader(sr, SHADER_TEXT);
-
-    glUniform1f(sr->time, (float) SDL_GetTicks() / 1000.0f);
-    glUniform2f(sr->camera, scr->cam.pos.x, -scr->cam.pos.y);
-    glUniform2f(sr->scale, scr->cam.scale, scr->cam.scale);
-    glUniform2f(sr->resolution, scr_width, scr_height);
-    float max_line_width = 0;
-
     const char *data = editor_get_data(e);
-
     Vec2f pos = {0};
     float line_width = 0;
+    float max_line_width = 0;
     Lexer l = lexer_init(data, strlen(data), keywords);
     
-    size_t last_i = 0;
-    Token token = {0};
 
+    Token token = {0};
+    size_t last_i = 0;
     while ((token = lexer_next(&l)).kind != TOKEN_END) {
+        if (token.kind == TOKEN_KEYWORD) {
+            sr_set_shader(sr, SHADER_PRIDE);
+        } else {
+            sr_set_shader(sr, SHADER_TEXT);
+        }
         Vec4f color;
         switch (token.kind) {
             case TOKEN_BLOCK_COMMENT:
@@ -238,11 +244,10 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
                                 color = hex_to_vec4f(0x905425FF); break;
             case TOKEN_CHRLIT:
             case TOKEN_STRLIT:  color = hex_to_vec4f(0xAA8A60FF); break;
-            case TOKEN_HASH:    color = hex_to_vec4f(0x9A9AA0FF); break;
+            case TOKEN_HASH:    color = hex_to_vec4f(0x9090B0FF); break;
             case TOKEN_SYMBOL:  color = hex_to_vec4f(0xCFCFCFFF); break;
-            case TOKEN_NUMLIT:  color = hex_to_vec4f(0x90EE90FF); break;
-            case TOKEN_KEYWORD: color = hex_to_vec4f(0xDFDF45FF); break;
-            case TOKEN_INVALID: color = hex_to_vec4f(0xAA4554FF); break;
+            case TOKEN_NUMLIT:  color = hex_to_vec4f(0x90BB90FF); break;
+            case TOKEN_INVALID: color = hex_to_vec4f(0xB06060FF); break;
             default: color = hex_to_vec4f(0xCFCFCFFF); break;
         }
 

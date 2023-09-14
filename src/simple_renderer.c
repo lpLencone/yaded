@@ -69,6 +69,8 @@ bool sr_load_shaders(Simple_Renderer *sr)
 
 void sr_set_shader(Simple_Renderer *sr, Shader_Enum shader)
 {
+    if (shader == sr->current_shader) return;
+    
     sr_flush(sr);
 
     sr->current_shader = shader;
