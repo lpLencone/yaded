@@ -414,7 +414,7 @@ int main(int argc, char *argv[])
     SDL_Window *window;
     window = scp(
         SDL_CreateWindow(
-            "Med Mad Editor", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 
+            "Medo Mad EDitOr", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 
             SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL)
     );
     scp(SDL_GL_CreateContext(window));
@@ -539,6 +539,7 @@ int main(int argc, char *argv[])
                         } break;
 
                         case SDLK_TAB: {
+                            // TODO: tabstop
                             editor_process_key(&e, EK_TAB);
                             update_last_moved(&scr);
                         } break;
@@ -552,6 +553,12 @@ int main(int argc, char *argv[])
                                 editor_process_key(&e, EK_RETURN);
                             }
                             update_last_moved(&scr);
+                        } break;
+
+                        case SDLK_f: {
+                            if (SDL_CTRL) {
+                                
+                            }
                         } break;
 
                         case SDLK_s: {

@@ -13,4 +13,4 @@ if [ `uname` = "Darwin" ]; then
     CFLAGS+=" -framework OpenGL"
 fi
 
-$CC $CFLAGS $INCLUDE `pkg-config --cflags $PKGS` main.c -o yaded $SRC $LIBS `pkg-config --libs $PKGS`
+$CC $CFLAGS $INCLUDE `pkg-config --cflags $PKGS` main.c -o medo $SRC $LIBS `pkg-config --libs $PKGS`
