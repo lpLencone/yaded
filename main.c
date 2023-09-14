@@ -29,7 +29,7 @@
 #define CAM_MOVE_VEL                2.5f
 #define CAM_SCALE_VEL               3.0f
 #define CAM_FINAL_SCALE             0.2f
-#define CAM_INIT_SCALE              0.80f
+#define CAM_INIT_SCALE              0.8f
 
 #define SCREEN_WIDTH                800
 #define SCREEN_HEIGHT               600
@@ -227,7 +227,6 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
     float line_width = 0;
     float max_line_width = 0;
     Lexer l = lexer_init(data, strlen(data), keywords);
-    
 
     Token token = {0};
     size_t last_i = 0;
@@ -402,7 +401,6 @@ void cursor_move(Screen *scr, size_t cx, size_t cy)
     scr->cur.last_cy = cy;
 }
 
-
 static FreeType_Renderer ftr = {0};
 static Simple_Renderer sr = {0};
 
@@ -410,17 +408,18 @@ int main(int argc, char *argv[])
 {
     FT_Face face = FT_init();
 
-    scc(SDL_Init(SDL_INIT_VIDEO));
-
+    
+    scc(SDL_Init(SDL_INIT_VIDEO));    
     gl_attr();
     SDL_Window *window;
     window = scp(
         SDL_CreateWindow(
-            "ged: geimer editor", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 
+            "Med Mad Editor", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 
             SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL)
     );
     scp(SDL_GL_CreateContext(window));
     init_glew();
+
     renderers_init(&sr, &ftr, face);
 
     assert(argc > 1);

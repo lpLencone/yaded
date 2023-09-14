@@ -118,9 +118,12 @@ size_t ftr_get_glyph_index_near_pad(FreeType_Renderer *ftr, const char *s,
 
 static void init_glyph_texture_atlas(FreeType_Renderer *ftr, FT_Face face)
 {
+    // The last flag makes the loading quite slow
+    FT_Int32 load_flags = FT_LOAD_RENDER | FT_LOAD_TARGET_(FT_RENDER_MODE_SDF);
+    
     for (size_t i = 32; i < 128; i++) {
         FT_Error error;
-        if ((error = FT_Load_Char(face, i, FT_LOAD_RENDER))) {
+        if ((error = FT_Load_Char(face, i, load_flags))) {
             fprintf(stderr, "ERROR: %s\n", FT_Error_String(error));
             exit(1);
         }
@@ -151,7 +154,7 @@ static void init_glyph_texture_atlas(FreeType_Renderer *ftr, FT_Face face)
     int x = 0;
     FT_Error error;
     for (size_t i = 32; i < 128; i++) {
-        if ((error = FT_Load_Char(face, i, FT_LOAD_RENDER))) {
+        if ((error = FT_Load_Char(face, i, load_flags))) {
             fprintf(stderr, "ERROR: %s\n", FT_Error_String(error));
             exit(1);
         }
