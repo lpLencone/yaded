@@ -1,6 +1,0 @@
-#ifndef MEDO_SIMPLE_EDITOR_H_
-#define MEDO_SIMPLE_EDITOR_H_
-
-
-
-#endif // MEDO_SIMPLE_EDITOR_H_
