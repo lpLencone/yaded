@@ -17,19 +17,19 @@
 #include "freetype_renderer.h"
 #include "simple_renderer.h"
 
-#define FONT_SIZE                   128
+#define FONT_SIZE                   256
 
 // #define FONT_FILENAME               "fonts/TSCu_Comic.ttf"
 #define FONT_FILENAME               "fonts/iosevka-cool-regular.ttf"
 
-#define CUR_INIT_WIDTH              5.0f
+#define CUR_INIT_WIDTH              20.0f
 #define CUR_MOVE_VEL                20.0f
 #define CUR_BLINK_VEL               6.0f
 
 #define CAM_MOVE_VEL                2.5f
 #define CAM_SCALE_VEL               3.0f
-#define CAM_FINAL_SCALE             0.2f
-#define CAM_INIT_SCALE              0.8f
+#define CAM_FINAL_SCALE             0.1f
+#define CAM_INIT_SCALE              0.5f
 
 #define SCREEN_WIDTH                800
 #define SCREEN_HEIGHT               600
@@ -202,10 +202,12 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
                    Editor *e, Screen *scr)
 {
     // Set background color
-    Vec4f bg = hex_to_vec4f(0x181818FF);
+    {
+        Vec4f bg = hex_to_vec4f(0x181818FF);
 
-    glClearColor(bg.x, bg.y, bg.z, bg.w);
-    glClear(GL_COLOR_BUFFER_BIT);
+        glClearColor(bg.x, bg.y, bg.z, bg.w);
+        glClear(GL_COLOR_BUFFER_BIT);
+    }
 
     // TODO: set viewport only on window change
     int scr_width, scr_height;
@@ -344,6 +346,18 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
             );
         } break;
 
+        case EM_SEARCHING: {
+            const float search_width = (e->match.x != -1)
+                ? ftr_get_s_width_n(ftr, e->searchbuf, strlen(e->searchbuf))
+                : 0;
+
+            sr_solid_rect(
+                sr, vec2f(scr->cur.actual_pos.x, - (int) e->c.y * FONT_SIZE),
+                    vec2f(search_width, scr->cur.height),
+                    vec4fs(0.5f)
+            );
+        } break;
+
         default:
             assert(0);
     }
@@ -406,9 +420,6 @@ static Simple_Renderer sr = {0};
 
 int main(int argc, char *argv[])
 {
-    FT_Face face = FT_init();
-
-    
     scc(SDL_Init(SDL_INIT_VIDEO));    
     gl_attr();
     SDL_Window *window;
@@ -420,6 +431,7 @@ int main(int argc, char *argv[])
     scp(SDL_GL_CreateContext(window));
     init_glew();
 
+    FT_Face face = FT_init();
     renderers_init(&sr, &ftr, face);
 
     assert(argc > 1);
@@ -529,35 +541,58 @@ int main(int argc, char *argv[])
                         } break;
 
                         case SDLK_BACKSPACE: {
-                            editor_process_key(&e, EK_BACKSPACE);
-                            update_last_moved(&scr);
-                        } break;
-
-                        case SDLK_DELETE: {
-                            editor_process_key(&e, EK_DELETE);
-                            update_last_moved(&scr);
-                        } break;
-
-                        case SDLK_TAB: {
-                            // TODO: tabstop
-                            editor_process_key(&e, EK_TAB);
-                            update_last_moved(&scr);
-                        } break;
-
-                        case SDLK_RETURN: {
                             if (SDL_CTRL) {
-                                editor_process_key(&e, EK_LINE_BELOW);
-                            } else if (SDL_SHIFT) {
-                                editor_process_key(&e, EK_LINE_ABOVE);
+                                editor_process_key(&e, EK_BACKSPACEW);
                             } else {
-                                editor_process_key(&e, EK_RETURN);
+                                editor_process_key(&e, EK_BACKSPACE);
                             }
                             update_last_moved(&scr);
                         } break;
 
+                        case SDLK_DELETE: {
+                            if (SDL_CTRL) {
+                                editor_process_key(&e, EK_DELETEW);
+                            } else {
+                                editor_process_key(&e, EK_DELETE);
+                            }
+                            update_last_moved(&scr);
+                        } break;
+
+                        case SDLK_TAB: {
+                            if (SDL_CTRL || SDL_SHIFT) {
+                                if (SDL_CTRL) {
+                                    editor_process_key(&e, EK_INDENT);
+                                }
+                                if (SDL_SHIFT) {
+                                    editor_process_key(&e, EK_UNINDENT);
+                                }
+                            } else {
+                                editor_process_key(&e, EK_TAB);
+                            }
+                            update_last_moved(&scr);
+                        } break;
+
+                        case SDLK_RETURN: {
+                            if (e.mode == EM_SEARCHING) {
+                                editor_process_key(&e, EK_SEARCH_NEXT);
+                                if (e.match.x >= 0) {
+                                    e.c = *(Vec2ui *) &e.match;
+                                }
+                            } else {
+                                if (SDL_CTRL) {
+                                    editor_process_key(&e, EK_LINE_BELOW);
+                                } else if (SDL_SHIFT) {
+                                    editor_process_key(&e, EK_LINE_ABOVE);
+                                } else {
+                                    editor_process_key(&e, EK_RETURN);
+                                }
+                                update_last_moved(&scr);
+                            }
+                        } break;
+
                         case SDLK_f: {
                             if (SDL_CTRL) {
-                                
+                                editor_process_key(&e, EK_SEARCH_START);
                             }
                         } break;
 
@@ -630,14 +665,8 @@ int main(int argc, char *argv[])
                             if (SDL_CTRL) {
                                 if (e.clipboard == NULL && SDL_HasClipboardText()) {
                                     char *s = SDL_GetClipboardText();
-                                    if (s[0] == '\0') {
-                                        fprintf(stderr, "SDL ERROR: %s\n", SDL_GetError());
-                                        SDL_free(s);
-                                    } else {
-                                        if (e.clipboard != NULL) free(e.clipboard);
-                                        e.clipboard = s;
-                                    }
-
+                                    if (e.clipboard != NULL) free(e.clipboard);
+                                    e.clipboard = s;
                                 } 
 
                                 if (e.clipboard != NULL) {
@@ -659,13 +688,18 @@ int main(int argc, char *argv[])
                                 printf("Reloaded shaders successfully\n");
                             }
                         } break;
+
+                        case SDLK_ESCAPE: {
+                            editor_process_key(&e, EK_ESC);
+                        }
                     }
                     scr.state.last_key = event.key.keysym;
                 } break;
-                static_assert(EK_COUNT == 44, "The number of editor keys has changed");
+
+                static_assert(EK_COUNT == 51, "The number of editor keys has changed");
 
                 case SDL_TEXTINPUT: {
-                    editor_write(&e, event.text.text);
+                    e.c = editor_write(&e, event.text.text);
                     update_last_moved(&scr);
                 } break;
             }

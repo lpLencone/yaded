@@ -5,9 +5,6 @@
 #include "line.h"
 #include "la.h"
 
-#define line_debug debug_print printf("line size: %ld\n", editor_get_line_size(e));
-#define editor_debug debug_print printf("(%u, %u)\n", e->c.x, e->c.y);
-
 typedef enum {
     EK_LEFT,
     EK_RIGHT,
@@ -24,10 +21,12 @@ typedef enum {
     EK_NEXT_EMPTY_LINE,
     EK_PREV_EMPTY_LINE,
     EK_BACKSPACE,
-    // EK_BACKSAPCEW,
+    EK_BACKSPACEW,
     EK_DELETE,
-    // EK_DELETEW
+    EK_DELETEW,
     EK_TAB,
+    EK_INDENT,
+    EK_UNINDENT,
     EK_RETURN,
     EK_LINE_BELOW,
     EK_LINE_ABOVE,
@@ -52,16 +51,19 @@ typedef enum {
     EK_SELECT_PREV_EMPTY_LINE,
     EK_SELECT_ALL,
     EK_SAVE,
+    EK_SEARCH_START,
+    EK_SEARCH_NEXT,
     EK_COPY,
     EK_PASTE,
     EK_CUT,
+    EK_ESC,
     EK_COUNT,
 } EditorKey;
 
 typedef enum {
     EM_EDITING,
     EM_SELECTION,
-    EM_SELECTION_RESOLUTION,
+    EM_SEARCHING,
     EM_BROWSING,
 } EditorMode;
 
@@ -72,7 +74,11 @@ typedef struct {
 
     char *clipboard;
 
+    char searchbuf[64];
+    Vec2i match;
+
     EditorMode mode;
+    
     List pathname;
 } Editor;
 
@@ -80,22 +86,25 @@ Editor editor_init(const char *pathname);
 void editor_clear(Editor *e);
 
 void editor_process_key(Editor *e, EditorKey key);
+Vec2ui editor_move(Editor *e, EditorKey key, Vec2ui pos);
+Vec2ui editor_edit(Editor *e, EditorKey key, Vec2ui pos);
 
-void editor_write(Editor *e, const char *s);
+#define editor_write(e, s) editor_write_at(e, s, (e)->c)
+Vec2ui editor_write_at(Editor *e, const char *s, Vec2ui at);
 
 #define editor_new_line(e, s) editor_new_line_at(e, s, (e)->c.y)
 #define editor_remove_line(e) editor_remove_line_at(e, (e)->c.y)
 #define editor_merge_line(e) editor_merge_line_at(e, (e)->c.y)
-#define editor_break_line(e) editor_break_line_at(e, (e)->c.y)
+#define editor_break_line(e) editor_break_line_at(e, (e)->c)
 void editor_new_line_at(Editor *e, const char *s, size_t at);
 void editor_remove_line_at(Editor *e, size_t at);
 void editor_merge_line_at(Editor *e, size_t at);
-void editor_break_line_at(Editor *e, size_t at);
+void editor_break_line_at(Editor *e, const Vec2ui pos);
 
-char *editor_get_data(const Editor *e);
-size_t editor_get_line_size(const Editor *e);
 #define editor_get_line(e) editor_get_line_at(e, (e)->c.y)
 const char *editor_get_line_at(const Editor *e, size_t at);
+char *editor_get_data(const Editor *e);
+size_t editor_get_line_size(const Editor *e);
 
 char *editor_retrieve_selection(const Editor *e);
 
