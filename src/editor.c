@@ -234,6 +234,17 @@ void editor_process_key(Editor *e, EditorKey key)
                         e->c = vec2ui(e->match.x, e->match.y);
                     }
                 } break;
+                
+                case EK_BACKSPACE: {
+                    size_t searchlen = strlen(e->searchbuf);
+                    if (searchlen > 0) {
+                        e->searchbuf[searchlen - 1] = '\0';
+                    }
+                    e->match = editor_search_match(e, e->c);
+                    if (e->match.x != -1) {
+                        e->c = vec2ui(e->match.x, e->match.y);
+                    }
+                }
 
                 default:
                     break;
