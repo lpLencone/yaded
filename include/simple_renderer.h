@@ -1,5 +1,5 @@
-#ifndef YADED_SIMPLE_RENDERER_H_
-#define YADED_SIMPLE_RENDERER_H_
+#ifndef MEDO_SIMPLE_RENDERER_H_
+#define MEDO_SIMPLE_RENDERER_H_
 
 #ifndef debug_print
 #include <stdio.h>
@@ -79,4 +79,4 @@ void sr_image_rect(
 
 void sr_flush(Simple_Renderer *sr);
 
-#endif // YADED_SIMPLE_RENDERER_H_
+#endif // MEDO_SIMPLE_RENDERER_H_

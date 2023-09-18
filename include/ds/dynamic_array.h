@@ -1,5 +1,5 @@
-#ifndef YADED_DS_DYNAMIC_ARRAY_H_
-#define YADED_DS_DYNAMIC_ARRAY_H_
+#ifndef MEDO_DS_DYNAMIC_ARRAY_H_
+#define MEDO_DS_DYNAMIC_ARRAY_H_
 
 #include <assert.h>
 #include <stdlib.h>
@@ -128,4 +128,4 @@
         peekp = &(da)->data[from]; \
     } while (0)
 
-#endif // YADED_DS_DYNAMIC_ARRAY_H_
+#endif // MEDO_DS_DYNAMIC_ARRAY_H_

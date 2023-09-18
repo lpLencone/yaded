@@ -1,5 +1,5 @@
-#ifndef YADED_LA_H_
-#define YADED_LA_H_
+#ifndef MEDO_LA_H_
+#define MEDO_LA_H_
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -60,4 +60,4 @@ Vec4f vec4f_div(Vec4f a, Vec4f b);
 float lerpf(float a, float b, float c);
 
 
-#endif // YADED_LA_H_
+#endif // MEDO_LA_H_

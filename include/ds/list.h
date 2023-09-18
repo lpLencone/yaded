@@ -1,5 +1,5 @@
-#ifndef YADED_DS_LIST_H_
-#define YADED_DS_LIST_H_
+#ifndef MEDO_DS_LIST_H_
+#define MEDO_DS_LIST_H_
 
 #include "ds/node.h"
 
@@ -24,5 +24,5 @@ void list_quicksort(List *list);
 
 void *list_get(const List *list, size_t at);
 
-#endif // YADED_DS_LIST_H_
+#endif // MEDO_DS_LIST_H_
 

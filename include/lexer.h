@@ -1,5 +1,5 @@
-#ifndef YADED_LEXER_H_
-#define YADED_LEXER_H_
+#ifndef MEDO_LEXER_H_
+#define MEDO_LEXER_H_
 
 #include "la.h"
 
@@ -45,4 +45,4 @@ typedef struct {
 Lexer lexer_init(const char *s, size_t len, const char **keywords);
 Token lexer_next(Lexer *l);
 
-#endif // YADED_LEXER_H_
+#endif // MEDO_LEXER_H_

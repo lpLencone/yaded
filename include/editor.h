@@ -1,5 +1,5 @@
-#ifndef YADED_EDITOR_H_
-#define YADED_EDITOR_H_
+#ifndef MEDO_EDITOR_H_
+#define MEDO_EDITOR_H_
 
 #include "ds/list.h"
 #include "line.h"
@@ -110,6 +110,6 @@ char *editor_retrieve_selection(const Editor *e);
 
 void editor_open(Editor *e, const char *pathname);
 
-#endif // YADED_EDITOR_H_
+#endif // MEDO_EDITOR_H_
 
 

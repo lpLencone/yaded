@@ -1,5 +1,5 @@
-#ifndef YADED_FREETYPE_RENDERER_H_
-#define YADED_FREETYPE_RENDERER_H_
+#ifndef MEDO_FREETYPE_RENDERER_H_
+#define MEDO_FREETYPE_RENDERER_H_
 
 #include "simple_renderer.h"
 
@@ -52,4 +52,4 @@ size_t ftr_get_glyph_index_near(
 size_t ftr_get_glyph_index_near_pad(
     FreeType_Renderer *ftr, const char *s, float width, char pad);
 
-#endif // YADED_FREETYPE_RENDERER_H_
+#endif // MEDO_FREETYPE_RENDERER_H_

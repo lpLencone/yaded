@@ -1,5 +1,5 @@
-#ifndef YADED_LINE_H_
-#define YADED_LINE_H_
+#ifndef MEDO_LINE_H_
+#define MEDO_LINE_H_
 
 #include <stddef.h>
 
@@ -31,4 +31,4 @@ void line_write_n(Line *line, const char *s, size_t n, size_t at);
 
 void line_delete_char(Line *line, size_t at);
 
-#endif // YADED_LINE_H_
+#endif // MEDO_LINE_H_

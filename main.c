@@ -326,7 +326,7 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
                     sr_solid_rect(
                         sr, vec2f(scr->cur.selection_pos.x, - (int) cy * FONT_SIZE),
                             vec2f(scr->cur.selection_width, scr->cur.height),
-                            vec4fs(0.5f)
+                            hex_to_vec4f(0xAAAAFF28)
                     );
                 }
             }
@@ -354,7 +354,7 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
             sr_solid_rect(
                 sr, vec2f(scr->cur.actual_pos.x, - (int) e->c.y * FONT_SIZE),
                     vec2f(search_width, scr->cur.height),
-                    vec4fs(0.5f)
+                    hex_to_vec4f(0xAAAAFF28)
             );
         } break;
 

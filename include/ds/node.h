@@ -1,5 +1,5 @@
-#ifndef YADED_DS_NODE_H_
-#define YADED_DS_NODE_H_
+#ifndef MEDO_DS_NODE_H_
+#define MEDO_DS_NODE_H_
 
 #ifndef debug_print
 #include <stdio.h>
@@ -19,4 +19,4 @@ typedef struct Node {
 Node   *node_init(const void *data, size_t size);
 void    node_end(Node *node);
 
-#endif // YADED_DS_NODE_H_
+#endif // MEDO_DS_NODE_H_

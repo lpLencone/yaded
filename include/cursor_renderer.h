@@ -1,5 +1,5 @@
-#ifndef YADED_CURSORRENDERER_H_
-#define YADED_CURSORRENDERER_H_
+#ifndef MEDO_CURSOR_RENDERER_H_
+#define MEDO_CURSOR_RENDERER_H_
 
 #include "la.h"
 #include "gl_extra.h"
@@ -24,4 +24,4 @@ void cr_use(const Cursor_Renderer *cr);
 void cr_move(const Cursor_Renderer *cr, Vec2f pos);
 void cr_draw(void);
 
-#endif // YADED_CURSORRENDERER_H_
+#endif // MEDO_CURSOR_RENDERER_H_
