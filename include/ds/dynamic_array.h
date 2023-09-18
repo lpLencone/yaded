@@ -26,8 +26,8 @@
         t *data; \
     } da
 
-// #define da_Type(da, t) 
-//     typedef da_var(da, t)
+#define da_Type(da, t) \
+    typedef da_var(da, t)
 
 #define da_zero(da) \
     do { \
@@ -72,7 +72,7 @@
             (da)->data = calloc(DA_INIT_CAPACITY, TYPESIZE(da)); \
         } \
  \
-        while ((da)->capacity < (da)->size + n + 1) { \
+        while ((da)->capacity < (da)->size + n) { \
             (da)->capacity *= 2; \
             (da)->data = realloc((da)->data, (da)->capacity * TYPESIZE(da)); \
             assert((da)->data != NULL); \
@@ -121,6 +121,7 @@
         copybuf = calloc(n, TYPESIZE(da)); \
         memcpy(copybuf, &((da)->data[from]), n * TYPESIZE(da)); \
     } while (0)
+    
 #define da_get_copy(da, copybuf) da_get_copy_n(da, copybuf, 0, (da)->size)
 
 #define da_peek(da, peekp, from) \

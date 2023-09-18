@@ -204,7 +204,6 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
     // Set background color
     {
         Vec4f bg = hex_to_vec4f(0x181818FF);
-
         glClearColor(bg.x, bg.y, bg.z, bg.w);
         glClear(GL_COLOR_BUFFER_BIT);
     }
@@ -249,7 +248,7 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
             case TOKEN_SYMBOL:  color = hex_to_vec4f(0xCFCFCFFF); break;
             case TOKEN_NUMLIT:  color = hex_to_vec4f(0x90BB90FF); break;
             case TOKEN_INVALID: color = hex_to_vec4f(0xB06060FF); break;
-            default: color = hex_to_vec4f(0xCFCFCFFF); break;
+            default:            color = hex_to_vec4f(0xCFCFCFFF); break;
         }
 
         for (size_t i = 0; i < token.len; i++) {

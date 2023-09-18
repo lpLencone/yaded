@@ -1,7 +1,7 @@
 #define _DEFAULT_SOURCE
 
 #include "editor.h"
-#include "ds/dynamic_array.h"
+#include "ds/string_builder.h"
 
 #include <assert.h>
 #include <dirent.h>
@@ -332,23 +332,19 @@ Vec2ui editor_write_at(Editor *e, const char *s, Vec2ui pos)
 
 char *editor_get_data(const Editor *e)
 {
-    da_var_zero(data, char);
+    String_Builder sb;
+    sb_zero(&sb);
 
     for (int cy = 0; cy < (int) e->lines.length; cy++) {
         const char *s = editor_get_line_at(e, cy);
-        da_append_n(&data, s, strlen(s));
+        sb_append_n(&sb, s, strlen(s));
         if (cy + 1 != (int) e->lines.length) {
-            da_append(&data, "\n");
+            sb_append_n(&sb, "\n", 1);
         }
     }
 
-    da_append(&data, "\0");
-
-    char *s;
-    da_get_copy(&data, s);
-    da_end(&data);
-
-    return s;
+    sb_append_null(&sb);
+    return sb.data;
 }
 
 size_t editor_get_line_size(const Editor *e)
@@ -468,6 +464,7 @@ Vec2ui editor_delete_char_at(Editor *e, Vec2ui at)
 
 Vec2ui editor_move(Editor *e, EditorKey key, Vec2ui pos)
 {
+#define issymbol(c) (isalnum(c) || c == '_')
     assert(pos.y < e->lines.length);
     Line *line = list_get(&e->lines, pos.y);
 
@@ -510,14 +507,23 @@ Vec2ui editor_move(Editor *e, EditorKey key, Vec2ui pos)
             pos = editor_move(e, EK_LEFT, pos);
 
             const char *s = editor_get_line_at(e, pos.y);
-            while (s[pos.x] == ' ' && pos.x > 0) {
-                s = editor_get_line_at(e, pos.y);
-                pos = editor_move(e, EK_LEFT, pos);
+            if (isspace(s[pos.x])) {
+                while (isspace(s[pos.x]) && pos.x > 0) {
+                    s = editor_get_line_at(e, pos.y);
+                    pos = editor_move(e, EK_LEFT, pos);
+                }
+            } else if (issymbol(s[pos.x])) {
+                while (issymbol(s[pos.x]) && pos.x > 0) {
+                    s = editor_get_line_at(e, pos.y);
+                    pos = editor_move(e, EK_LEFT, pos);
+                }
+            } else {
+                while (!issymbol(s[pos.x]) && !isspace(s[pos.x]) && pos.x > 0) {
+                    s = editor_get_line_at(e, pos.y);
+                    pos = editor_move(e, EK_LEFT, pos);
+                }
             }
-            while (s[pos.x] != ' ' && pos.x > 0) {
-                s = editor_get_line_at(e, pos.y);
-                pos = editor_move(e, EK_LEFT, pos);
-            }
+
             if (pos.x != 0) {
                 pos = editor_move(e, EK_RIGHT, pos);
             }
@@ -527,13 +533,21 @@ Vec2ui editor_move(Editor *e, EditorKey key, Vec2ui pos)
             pos = editor_move(e, EK_RIGHT, pos);
 
             const char *s = editor_get_line_at(e, pos.y);
-            while (s[pos.x] == ' ') {
-                s = editor_get_line_at(e, pos.y);
-                pos = editor_move(e, EK_RIGHT, pos);
-            }
-            while (s[pos.x] != ' ' && pos.x < strlen(s)) {
-                s = editor_get_line_at(e, pos.y);
-                pos = editor_move(e, EK_RIGHT, pos);
+            if (isspace(s[pos.x])) {
+                while (isspace(s[pos.x]) && pos.x < strlen(s)) {
+                    s = editor_get_line_at(e, pos.y);
+                    pos = editor_move(e, EK_RIGHT, pos);
+                }
+            } else if (issymbol(s[pos.x])) {
+                while (issymbol(s[pos.x]) && pos.x < strlen(s)) {
+                    s = editor_get_line_at(e, pos.y);
+                    pos = editor_move(e, EK_RIGHT, pos);
+                }
+            } else {
+                while (!issymbol(s[pos.x]) && !isspace(s[pos.x]) && pos.x < strlen(s)) {
+                    s = editor_get_line_at(e, pos.y);
+                    pos = editor_move(e, EK_RIGHT, pos);
+                }
             }
         } break;
 
@@ -582,6 +596,7 @@ Vec2ui editor_move(Editor *e, EditorKey key, Vec2ui pos)
     }
 
     return pos;
+#undef issymbol
 }
 
 Vec2ui editor_edit(Editor *e, EditorKey key, Vec2ui pos)
@@ -600,11 +615,13 @@ Vec2ui editor_edit(Editor *e, EditorKey key, Vec2ui pos)
         case EK_BACKSPACEW: {
             editor_process_key(e, EK_SELECT_LEFTW);
             editor_selection_delete(e);
+            e->mode = EM_EDITING;
         } break;
 
         case EK_DELETEW: {
             editor_process_key(e, EK_SELECT_RIGHTW);
             editor_selection_delete(e);
+            e->mode = EM_EDITING;
         } break;
 
         case EK_TAB: {
@@ -1195,4 +1212,3 @@ static int line_compare(const void *line1, const void *line2)
 {
     return strcmp(((Line *) line1)->s, ((Line *) line2)->s);
 }
-
