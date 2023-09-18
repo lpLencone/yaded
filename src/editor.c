@@ -37,7 +37,8 @@ static void editor_selection_copy(Editor *e);
 #define editor_paste(e) editor_write(e, e->clipboard);
 
 static void editor_search_start(Editor *e);
-static Vec2i editor_search_match(Editor *e, Vec2ui pos);
+static Vec2i editor_search_next(Editor *e, Vec2ui pos);
+static Vec2i editor_search_prev(Editor *e, Vec2ui pos);
 
 static const char *get_pathname_cstr(const List *pathname);
 static void update_pathname(List *pathname, const char *path);
@@ -229,7 +230,21 @@ void editor_process_key(Editor *e, EditorKey key)
 
                 case EK_SEARCH_NEXT: {
                     Vec2ui pos = editor_move(e, EK_RIGHT, e->c);
-                    e->match = editor_search_match(e, pos);
+                    e->match = editor_search_next(e, pos);
+                    if (e->match.x != -1) {
+                        e->c = vec2ui(e->match.x, e->match.y);
+                    }
+                } break;
+
+                case EK_SEARCH_PREV: {
+                    Vec2ui pos = {0};
+                    if (e->c.x == 0 && e->c.y == 0) {
+                        pos.y = e->lines.length - 1;
+                        pos.x = strlen(editor_get_line_at(e, pos.y));
+                    } else {
+                        pos = editor_move(e, EK_LEFT, e->c);
+                    }
+                    e->match = editor_search_prev(e, pos);
                     if (e->match.x != -1) {
                         e->c = vec2ui(e->match.x, e->match.y);
                     }
@@ -240,7 +255,7 @@ void editor_process_key(Editor *e, EditorKey key)
                     if (searchlen > 0) {
                         e->searchbuf[searchlen - 1] = '\0';
                     }
-                    e->match = editor_search_match(e, e->c);
+                    e->match = editor_search_next(e, e->c);
                     if (e->match.x != -1) {
                         e->c = vec2ui(e->match.x, e->match.y);
                     }
@@ -253,7 +268,7 @@ void editor_process_key(Editor *e, EditorKey key)
     }
 }
 
-static_assert(EK_COUNT == 51, "The number of editor keys has changed");
+static_assert(EK_COUNT == 52, "The number of editor keys has changed");
 
 Vec2ui editor_write_at(Editor *e, const char *s, Vec2ui pos)
 {
@@ -267,7 +282,7 @@ Vec2ui editor_write_at(Editor *e, const char *s, Vec2ui pos)
         strcpy(e->searchbuf + buf_i, s);
         e->searchbuf[buf_i + strlen(s)] = '\0';
 
-        e->match = editor_search_match(e, e->c);
+        e->match = editor_search_next(e, e->c);
         if (e->match.x != -1) {
             return vec2ui(e->match.x, e->match.y);
         }
@@ -693,14 +708,6 @@ static void editor_action(Editor *e, EditorKey key)
             }
         } break;
 
-        case EK_SEARCH_NEXT: {
-            assert(e->mode == EM_SEARCHING);
-            e->match = editor_search_match(e, e->c);
-            if (e->match.x != -1) {
-                e->c = vec2ui(e->match.x, e->match.y);
-            }
-        } break;
-
         case EK_COPY: {
             editor_selection_copy(e);
         } break;
@@ -891,7 +898,7 @@ static void editor_select(Editor *e, EditorKey key)
     }
 }
 
-static_assert(EK_COUNT == 51, "The number of editor keys has changed");
+static_assert(EK_COUNT == 52, "The number of editor keys has changed");
 
 static void editor_selection_delete(Editor *e)
 {
@@ -943,12 +950,25 @@ static void editor_selection_copy(Editor *e)
 
 static void editor_search_start(Editor *e)
 {
-    e->mode = EM_SEARCHING;
     e->searchbuf[0] = '\0';
     e->match = vec2is(-1);
+
+    if (e->mode == EM_SELECTION) {
+        const char *s = editor_retrieve_selection(e);
+        if (strlen(s) < sizeof(e->searchbuf)) {
+            strcpy(e->searchbuf, s);
+            e->searchbuf[strlen(s)] = '\0';
+            if (vec2ui_cmp_yx(e->c, e->cs) > 0) {
+                e->c = e->cs;
+            }
+            e->match = vec2i(e->c.x, e->c.y);
+        }
+    }
+
+    e->mode = EM_SEARCHING;
 }
 
-static Vec2i editor_search_match(Editor *e, Vec2ui pos)
+static Vec2i editor_search_next(Editor *e, Vec2ui pos)
 {
     size_t searchlen = strlen(e->searchbuf);
 
@@ -968,6 +988,37 @@ static Vec2i editor_search_match(Editor *e, Vec2ui pos)
         const Line *line = (Line *) list_get(&e->lines, cy);
         size_t end_cx = (cy == pos.y) ? pos.x : line->size;
         for (size_t cx = 0; cx < end_cx; cx++) {
+            if (strncmp(&line->s[cx], e->searchbuf, searchlen) == 0) {
+                return vec2i(cx, cy);
+            }
+        }
+    }
+
+    return vec2is(-1);
+}
+
+static Vec2i editor_search_prev(Editor *e, Vec2ui pos)
+{
+    size_t searchlen = strlen(e->searchbuf);
+
+    // From the cursor down to the start of the file
+    for (int cy = pos.y; cy >= 0; cy--) {
+        const Line *line = (Line *) list_get(&e->lines, cy);
+        if (line->size == 0) continue;
+        size_t start_cx = (cy == (int) pos.y) ? pos.x : line->size - 1;
+        for (int cx = start_cx; cx >= 0; cx--) {
+            if (strncmp(&line->s[cx], e->searchbuf, searchlen) == 0) {
+                return vec2i(cx, cy);
+            }
+        }
+    }
+
+    // From the end of the file down to the cursor
+    for (int cy = (int) e->lines.length - 1; cy >= (int) pos.y; cy--) {
+        const Line *line = (Line *) list_get(&e->lines, cy);
+        if (line->size == 0) continue;
+        size_t end_cx = (cy == (int) pos.y) ? pos.x : 0;
+        for (int cx = (int) line->size - 1; cx >= (int) end_cx; cx--) {
             if (strncmp(&line->s[cx], e->searchbuf, searchlen) == 0) {
                 return vec2i(cx, cy);
             }

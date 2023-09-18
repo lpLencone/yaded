@@ -574,7 +574,11 @@ int main(int argc, char *argv[])
 
                         case SDLK_RETURN: {
                             if (e.mode == EM_SEARCHING) {
-                                editor_process_key(&e, EK_SEARCH_NEXT);
+                                if (SDL_SHIFT) {
+                                    editor_process_key(&e, EK_SEARCH_PREV);
+                                } else {
+                                    editor_process_key(&e, EK_SEARCH_NEXT);
+                                }
                                 if (e.match.x >= 0) {
                                     e.c = *(Vec2ui *) &e.match;
                                 }
@@ -696,7 +700,7 @@ int main(int argc, char *argv[])
                     scr.state.last_key = event.key.keysym;
                 } break;
 
-                static_assert(EK_COUNT == 51, "The number of editor keys has changed");
+                static_assert(EK_COUNT == 52, "The number of editor keys has changed");
 
                 case SDL_TEXTINPUT: {
                     e.c = editor_write(&e, event.text.text);

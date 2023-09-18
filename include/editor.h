@@ -53,6 +53,7 @@ typedef enum {
     EK_SAVE,
     EK_SEARCH_START,
     EK_SEARCH_NEXT,
+    EK_SEARCH_PREV,
     EK_COPY,
     EK_PASTE,
     EK_CUT,
