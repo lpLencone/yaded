@@ -48,8 +48,6 @@ static void find_scope_end(Editor *e);
 static void line_dealloc(void *line);
 static int line_compare(const void *line1, const void *line2);
 
-#define EDITOR_
-
 Editor editor_init(const char *pathname)
 {
     Editor e = {0};
@@ -301,6 +299,10 @@ Vec2ui editor_write_at(Editor *e, const char *s, Vec2ui pos)
         e->mode = EM_EDITING;
     }
 
+    for (size_t i = 0; i < strlen(s); ++i) {
+        editor_insert_char(&e->e_, s[i]);
+    }
+
     String_View sv_chunk = sv_from_parts(s, strlen(s));
     while (sv_chunk.count > 0) {
         String_View sv_line = {0};
@@ -488,6 +490,7 @@ Vec2ui editor_move(Editor *e, EditorKey key, Vec2ui pos)
 
     switch (key) {
         case EK_LEFT: {
+            EDITOR_ editor_move_char_left(&e->e_); break;
             if (pos.x > line->size) {
                 pos.x = line->size;
             }
@@ -501,6 +504,7 @@ Vec2ui editor_move(Editor *e, EditorKey key, Vec2ui pos)
         } break;
 
         case EK_RIGHT: {
+            EDITOR_ editor_move_char_right(&e->e_); break;
             if (pos.x < line->size) {
                 pos.x++;
             } else if (pos.y + 1 < e->lines.length) {
@@ -510,12 +514,14 @@ Vec2ui editor_move(Editor *e, EditorKey key, Vec2ui pos)
         } break;
 
         case EK_UP: {
+            EDITOR_ editor_move_line_up(&e->e_); break; 
             if (pos.y > 0) {
                 pos.y--;
             }
         } break;
 
         case EK_DOWN: {
+            EDITOR_ editor_move_line_down(&e->e_); break;
             if (pos.y + 1 < e->lines.length) {
                 pos.y++;
             }
@@ -621,12 +627,15 @@ Vec2ui editor_edit(Editor *e, EditorKey key, Vec2ui pos)
 {
     switch (key) {
         case EK_BACKSPACE: {
+            EDITOR_ editor_backspace(&e->e_);
+
             if (pos.y == 0 && pos.x == 0) return pos;
             pos = editor_move(e, EK_LEFT, pos);
             pos = editor_delete_char_at(e, pos);
         } break;
 
         case EK_DELETE: {
+            EDITOR_ editor_delete(&e->e_);
             pos = editor_delete_char_at(e, pos);
         } break;
 
@@ -722,6 +731,8 @@ Vec2ui editor_edit(Editor *e, EditorKey key, Vec2ui pos)
 
         case EK_RETURN:
         case EK_BREAK_LINE: {
+            EDITOR_ editor_insert_char(&e->e_, '\n');
+            
             editor_break_line(e);
             pos = editor_move(e, EK_DOWN, pos);
             pos = editor_move(e, EK_LINE_HOME, pos);
@@ -1115,6 +1126,7 @@ static void save_file(const Editor *e)
 
 static void open_file(Editor *e, const char *filename)
 {
+#if 0
     FILE *file = fopen(filename, "r");
     if (file == NULL) {
         fprintf(stderr, "Could not open file \"%s\": %s\n", filename, strerror(errno));
@@ -1146,7 +1158,7 @@ static void open_file(Editor *e, const char *filename)
             free(c_chunk);
         }
     }
-
+#endif
     editor_load_from_file(&e->e_, filename);
 }
 

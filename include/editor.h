@@ -6,6 +6,7 @@
 #include "line.h"
 #include "la.h"
 
+#define EDITOR_
 #include "editor_/editor.h"
 
 typedef enum {

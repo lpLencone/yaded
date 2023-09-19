@@ -222,6 +222,7 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
     }
 
     // Render Glyphs
+#if 0
     sr_set_shader(sr, SHADER_TEXT);
     const char *data = editor_get_data(e);
     Vec2f pos = {0};
@@ -266,6 +267,51 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
 
         if (line_width > max_line_width) max_line_width = line_width;
     }
+#else
+    float line_width = 0;
+    float max_line_width = 0;
+    {
+        Vec2f pos = {0};
+        size_t last_i = 0;
+        const char *data = e->e_.data.data;
+        for (size_t i = 0; i < e->e_.tokens.size; ++i) {
+            Token token = e->e_.tokens.data[i];
+            if (token.kind == TOKEN_KEYWORD) {
+                sr_set_shader(sr, SHADER_PRIDE);
+            } else {
+                sr_set_shader(sr, SHADER_TEXT);
+            }
+            Vec4f color;
+            switch (token.kind) {
+                case TOKEN_BLOCK_COMMENT:
+                case TOKEN_INLINE_COMMENT: 
+                                    color = hex_to_vec4f(0x905425FF); break;
+                case TOKEN_CHRLIT:
+                case TOKEN_STRLIT:  color = hex_to_vec4f(0xAA8A60FF); break;
+                case TOKEN_HASH:    color = hex_to_vec4f(0x9090B0FF); break;
+                case TOKEN_SYMBOL:  color = hex_to_vec4f(0xCFCFCFFF); break;
+                case TOKEN_NUMLIT:  color = hex_to_vec4f(0x90BB90FF); break;
+                case TOKEN_INVALID: color = hex_to_vec4f(0xB06060FF); break;
+                default:            color = hex_to_vec4f(0xCFCFCFFF); break;
+            }
+
+            for (size_t i = 0; i < token.len; i++) {
+                if (data[last_i + i] == '\n') {
+                    line_width = pos.x;
+
+                    pos.y -= (float) FONT_SIZE;
+                    pos.x = 0;
+                } else {
+                    pos = ftr_render_s_n(ftr, sr, data + last_i + i, 1, pos, color);
+                    line_width = pos.x;
+                }
+            }
+            last_i += token.len;
+
+            if (line_width > max_line_width) max_line_width = line_width;
+        }
+    }
+#endif
 
     // Render Cursor
     sr_set_shader(sr, SHADER_COLOR);
@@ -366,7 +412,6 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
 
 
     // Update camera
-
     const float cam_x_start_limit = (max_line_width < 0.4f * scr_width / scr->cam.scale)
         ? max_line_width
         : 0.4f * scr_width / scr->cam.scale; // 1/10 of scr_width from left edge (1/2 - 1/10 = 2/5)
@@ -419,28 +464,31 @@ static Simple_Renderer sr = {0};
 
 int main(int argc, char *argv[])
 {
-    scc(SDL_Init(SDL_INIT_VIDEO));    
-    gl_attr();
-    SDL_Window *window;
-    window = scp(
-        SDL_CreateWindow(
-            "Medo Mad EDitOr", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 
-            SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL)
-    );
-    scp(SDL_GL_CreateContext(window));
-    init_glew();
-
-    FT_Face face = FT_init();
-    renderers_init(&sr, &ftr, face);
-
     assert(argc > 1);
-    Editor e = editor_init(argv[1]);
-    
+
+    Editor e;
     Screen scr = {0};
-    scr.cam.scale = CAM_INIT_SCALE;
-    scr.cur.actual_width = CUR_INIT_WIDTH;
-    scr.cur.render_width = CUR_INIT_WIDTH;
-    scr.cur.height = FONT_SIZE;
+    SDL_Window *window;
+    {
+        scc(SDL_Init(SDL_INIT_VIDEO));    
+        gl_attr();
+        window = scp(
+            SDL_CreateWindow(
+                "Medo Mad EDitOr", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 
+                SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL)
+        );
+        scp(SDL_GL_CreateContext(window));
+        init_glew();
+
+        FT_Face face = FT_init();
+        renderers_init(&sr, &ftr, face);
+        
+        e = editor_init(argv[1]);
+        scr.cam.scale = CAM_INIT_SCALE;
+        scr.cur.actual_width = CUR_INIT_WIDTH;
+        scr.cur.render_width = CUR_INIT_WIDTH;
+        scr.cur.height = FONT_SIZE;
+    }
 
     bool quit = false;
     while (!quit) {
@@ -708,6 +756,21 @@ int main(int argc, char *argv[])
             }
         }
 
+#if 1
+        // Update cursor position on the screen
+        if (e.e_.lines.size > 0) {
+            size_t row = editor_cursor_row(&e.e_);
+            Line_ line = e.e_.lines.data[row];
+            size_t col = e.e_.cursor - line.begin;
+            size_t line_size = line.end - line.begin;
+            printf("%zu %zu %zu\n", e.e_.cursor, row, col);
+            scr.cur.actual_pos.y = row * FONT_SIZE;
+            scr.cur.actual_pos.x = (e.mode != EM_BROWSING)
+                ? ftr_get_s_width_n(&ftr, &e.e_.data.data[line.begin], col > line_size ? line_size : col)
+                : ftr_get_s_width_n(&ftr, &e.e_.data.data[line.begin], line_size) / 2;
+        }
+        
+#else
         // Update Cursor
         if (e.c.y != scr.cur.last_cy) {
             const char *s = (scr.cur.last_cy < e.lines.length) 
@@ -728,7 +791,7 @@ int main(int argc, char *argv[])
         scr.cur.actual_pos.x = (e.mode != EM_BROWSING) 
             ? ftr_get_s_width_n(&ftr, editor_get_line(&e), (e.c.x > n) ? n : e.c.x)
             : ftr_get_s_width_n(&ftr, editor_get_line(&e), n) / 2;
-
+#endif
         scr.cur.vel = vec2f_mul(
             vec2f_sub(scr.cur.render_pos, scr.cur.actual_pos),
             vec2fs(CUR_MOVE_VEL)
