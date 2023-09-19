@@ -2,8 +2,11 @@
 #define MEDO_EDITOR_H_
 
 #include "ds/list.h"
+#include "ds/string_builder.h"
 #include "line.h"
 #include "la.h"
+
+#include "editor_/editor.h"
 
 typedef enum {
     EK_LEFT,
@@ -73,6 +76,8 @@ typedef struct {
     Vec2ui c; // Cursor
     Vec2ui cs; // Selection cursor
 
+    Editor_ e_;
+
     char *clipboard;
 
     char searchbuf[64];
@@ -110,6 +115,9 @@ size_t editor_get_line_size(const Editor *e);
 char *editor_retrieve_selection(const Editor *e);
 
 void editor_open(Editor *e, const char *pathname);
+
+void editor_selection_start(Editor *e, Vec2ui pos);
+void editor_selection_stop(Editor *e);
 
 #endif // MEDO_EDITOR_H_
 

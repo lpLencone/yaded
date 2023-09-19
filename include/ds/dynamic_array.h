@@ -36,6 +36,14 @@
         (da)->data = NULL; \
     } while (0)
 
+#define da_clear(da) \
+    do { \
+        if ((da)->data != NULL) { \
+            free((da)->data); \
+        } \
+        da_zero(da); \
+    } while (0)
+
 #define da_init(da, d, n) \
     do { \
         (da)->size = n; \
