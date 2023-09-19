@@ -32,7 +32,7 @@ static void open_dir(Editor *e, const char *dirname);
 static void editor_browsing(Editor *e, EditorKey key);
 static void editor_action(Editor *e, EditorKey key);
 static Vec2ui editor_select(Editor *e, EditorKey key, Vec2ui pos);
-static Vec2ui editor_selection_delete(Editor *e, Vec2ui begin, Vec2ui end);
+static size_t editor_selection_delete(Editor *e, size_t begin, size_t end);
 static void editor_selection_copy(Editor *e);
 #define editor_paste(e) editor_write(e, e->clipboard);
 
@@ -134,7 +134,7 @@ void editor_process_key(Editor *e, EditorKey key)
                 case EK_BREAK_LINE:
                 case EK_TAB: {
                     if (e->mode == EM_SELECTION) {
-                        e->c = editor_selection_delete(e, e->c, e->cs);
+                        e->e_.cursor = editor_selection_delete(e, e->e_.cursor, e->select_cur);
                         e->mode = EM_EDITING;
                         if (key == EK_BACKSPACE || key == EK_DELETE ||
                             key == EK_BACKSPACEW || key == EK_DELETEW) 
@@ -289,7 +289,7 @@ size_t editor_write_at(Editor *e, const char *s, size_t at)
     }
 
     if (e->mode == EM_SELECTION) {
-        // at = editor_selection_delete(e, at, e->cs);
+        // at = editor_selection_delete(e, );
         e->mode = EM_EDITING;
     }
 
@@ -301,8 +301,6 @@ void editor_selection_start(Editor *e, Vec2ui pos)
 {
     assert(e->mode != EM_SELECTION);
     e->mode = EM_SELECTION;
-    e->cs = pos;
-
     e->select_cur = e->e_.cursor;
 }
 
@@ -386,19 +384,19 @@ Vec2ui editor_move(Editor *e, EditorKey key, Vec2ui pos)
 #define issymbol(c) (isalnum(c) || c == '_')
     switch (key) {
         case EK_LEFT: {
-            EDITOR_ editor_move_char_left(&e->e_);
+            editor_move_char_left(&e->e_);
         } break;
 
         case EK_RIGHT: {
-            EDITOR_ editor_move_char_right(&e->e_);
+            editor_move_char_right(&e->e_);
         } break;
 
         case EK_UP: {
-            EDITOR_ editor_move_line_up(&e->e_);
+            editor_move_line_up(&e->e_);
         } break;
 
         case EK_DOWN: {
-            EDITOR_ editor_move_line_down(&e->e_);
+            editor_move_line_down(&e->e_);
         } break;
 
         case EK_LEFTW: {
@@ -500,18 +498,18 @@ Vec2ui editor_edit(Editor *e, EditorKey key, Vec2ui pos)
 {
     switch (key) {
         case EK_BACKSPACE: {
-            EDITOR_ editor_backspace(&e->e_);
+            editor_backspace(&e->e_);
         } break;
 
         case EK_DELETE: {
-            EDITOR_ editor_delete(&e->e_);
+            editor_delete(&e->e_);
         } break;
 
         case EK_BACKSPACEW: {
             e->mode = EM_SELECTION;
             e->cs = pos;
             pos = editor_move(e, EK_LEFTW, pos);
-            pos = editor_selection_delete(e, pos, e->cs);
+            e->e_.cursor = editor_selection_delete(e, e->e_.cursor, e->select_cur);
             e->mode = EM_EDITING;
         } break;
 
@@ -519,7 +517,7 @@ Vec2ui editor_edit(Editor *e, EditorKey key, Vec2ui pos)
             e->mode = EM_SELECTION;
             e->cs = pos;
             pos = editor_move(e, EK_RIGHTW, pos);
-            pos = editor_selection_delete(e, pos, e->cs);
+            e->e_.cursor = editor_selection_delete(e, e->e_.cursor, e->select_cur);
             e->mode = EM_EDITING;
         } break;
 
@@ -628,7 +626,7 @@ static void editor_action(Editor *e, EditorKey key)
 
         case EK_CUT: {
             editor_selection_copy(e);
-            e->c = editor_selection_delete(e, e->c, e->cs);
+            e->e_.cursor = editor_selection_delete(e, e->e_.cursor, e->select_cur);
         } break;
 
         default:
@@ -812,15 +810,17 @@ static Vec2ui editor_select(Editor *e, EditorKey key, Vec2ui pos)
 
 static_assert(EK_COUNT == 52, "The number of editor keys has changed");
 
-static Vec2ui editor_selection_delete(Editor *e, Vec2ui begin, Vec2ui end)
+static size_t editor_selection_delete(Editor *e, size_t begin, size_t end)
 {
     assert(e->mode == EM_SELECTION);
 
-    if (vec2ui_cmp_yx(begin, end) > 0) {
-        Vec2ui temp = begin;
+    if (begin > end) {
+        size_t temp = begin;
         begin = end;
         end = temp;
     }
+
+    editor_delete_sn_from(&e->e_, end - begin, begin);
 
     return begin;
 }

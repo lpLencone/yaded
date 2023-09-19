@@ -101,7 +101,7 @@
 #define da_append_n(da, d, n) da_insert_n(da, d, n, (da)->size)
 #define da_append(da, d) da_append_n(da, d, 1)
 
-#define da_remove_n(da, from, n) \
+#define da_remove_n_from(da, n, from) \
     do { \
         assert(from + n <= (da)->size);  \
  \
@@ -122,7 +122,7 @@
             (da)->capacity /= 2; \
         } \
     } while (0)
-#define da_remove_from(da, from) da_remove_n(da, from, 1)
+#define da_remove_from(da, from) da_remove_n_from(da, 1, from)
 
 #define da_get_copy_n(da, copybuf, from, n) \
     do { \
