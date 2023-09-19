@@ -338,50 +338,57 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
 
             // Render selection background
             if (e->mode == EM_SELECTION) {
-                Vec2ui csbegin = e->c;  // Cursor select begin
-                Vec2ui csend = e->cs;   // Cursor select end
-                
-                if (vec2ui_cmp_yx(e->c, e->cs) > 0) {
-                    Vec2ui temp = csbegin;
-                    csbegin = csend;
-                    csend = temp;
+                size_t select_begin = e->select_cur;
+                size_t select_end = e->e_.cursor;
+
+                if (select_begin > select_end) {
+                    size_t tmp = select_begin;
+                    select_begin = select_end;
+                    select_end = tmp;
                 }
-                
-                for (uint32_t cy = csbegin.y; cy <= csend.y; cy++) {
-                    scr->cur.selection_pos.x = 0;
+                size_t row_begin = editor_cursor_row(&e->e_, select_begin);
+                size_t row_end = editor_cursor_row(&e->e_, select_end);
 
-                    const char *s = editor_get_line_at(e, cy);
-                    size_t slen = strlen(s);
+                for (size_t row = row_begin; row <= row_end; row++) {
+                    Line_ line = e->e_.lines.data[row];
 
-                    size_t line_cx_begin = 0;
-                    size_t line_cx_end = slen;
-                    if (cy == csbegin.y) {
-                        line_cx_begin = (csbegin.x < slen) ? csbegin.x : slen;
-                    }
-                    if (cy == csend.y) {
-                        line_cx_end = (csend.x < slen) ? csend.x : slen;
-                    } else {
-                        line_cx_end++; // Select one more character, as though it was a `\n`
+                    float select_col_begin = 0;
+                    if (row == row_begin) {
+                        select_col_begin = select_begin - line.begin;
                     }
 
-                    scr->cur.selection_width = 
-                        ftr_get_s_width_n_pad(ftr, &s[line_cx_begin], line_cx_end - line_cx_begin, ' ');
+                    float select_col_end = line.end - line.begin;
+                    if (row == row_end) {
+                        select_col_end = select_end - line.begin;
+                    }
 
-                    scr->cur.selection_pos.x = ftr_get_s_width_n(ftr, s, line_cx_begin);
+                    size_t select_render_begin = 
+                        ftr_get_s_width_n(ftr, &e->e_.data.data[line.begin], select_col_begin);
+
+                    size_t select_render_end = 
+                        ftr_get_s_width_n(ftr, &e->e_.data.data[line.begin], select_col_end);
+
+                    size_t select_render_width = select_render_end - select_render_begin;
+
+                    Vec4f color = hex_to_vec4f(0xC0C0FF30);
                     sr_solid_rect(
-                        sr, vec2f(scr->cur.selection_pos.x, - (int) cy * FONT_SIZE),
-                            vec2f(scr->cur.selection_width, scr->cur.height),
-                            hex_to_vec4f(0xAAAAFF28)
-                    );
+                        sr, vec2f(select_render_begin, - (int) row * FONT_SIZE),
+                            vec2f(select_render_width, scr->cur.height),
+                            color);
                 }
             }
         } break;
 
         case EM_BROWSING: {
-            const char *s = editor_get_line(e);
-            const size_t slen = strlen(s);
-            scr->cur.actual_width = ftr_get_s_width_n(ftr, s, slen);
-            scr->cur.render_width += 
+            size_t row = editor_cursor_row(&e->e_, e->e_.cursor);
+
+            Line_ line = e->e_.lines.data[row];
+            size_t line_size = line.end - line.begin;
+
+            scr->cur.actual_width = 
+                ftr_get_s_width_n(ftr, &e->e_.data.data[line.begin], line_size);
+
+            scr->cur.render_width +=
                 (scr->cur.actual_width - scr->cur.render_width) * 10 * DELTA_TIME;
 
             sr_solid_rect(
@@ -750,7 +757,7 @@ int main(int argc, char *argv[])
                 static_assert(EK_COUNT == 52, "The number of editor keys has changed");
 
                 case SDL_TEXTINPUT: {
-                    e.c = editor_write(&e, event.text.text);
+                    e.e_.cursor = editor_write_at(&e, event.text.text, e.e_.cursor);
                     update_last_moved(&scr);
                 } break;
             }
@@ -759,11 +766,10 @@ int main(int argc, char *argv[])
 #if 1
         // Update cursor position on the screen
         if (e.e_.lines.size > 0) {
-            size_t row = editor_cursor_row(&e.e_);
+            size_t row = editor_cursor_row(&e.e_, e.e_.cursor);
             Line_ line = e.e_.lines.data[row];
             size_t col = e.e_.cursor - line.begin;
             size_t line_size = line.end - line.begin;
-            printf("%zu %zu %zu\n", e.e_.cursor, row, col);
             scr.cur.actual_pos.y = row * FONT_SIZE;
             scr.cur.actual_pos.x = (e.mode != EM_BROWSING)
                 ? ftr_get_s_width_n(&ftr, &e.e_.data.data[line.begin], col > line_size ? line_size : col)
@@ -784,13 +790,6 @@ int main(int argc, char *argv[])
         if (e.c.x != scr.cur.last_cx) {
             cursor_move(&scr, e.c.x, e.c.y);
         }
-
-        // Update cursor position on the screen
-        scr.cur.actual_pos.y = e.c.y * FONT_SIZE;
-        size_t n = editor_get_line_size(&e);
-        scr.cur.actual_pos.x = (e.mode != EM_BROWSING) 
-            ? ftr_get_s_width_n(&ftr, editor_get_line(&e), (e.c.x > n) ? n : e.c.x)
-            : ftr_get_s_width_n(&ftr, editor_get_line(&e), n) / 2;
 #endif
         scr.cur.vel = vec2f_mul(
             vec2f_sub(scr.cur.render_pos, scr.cur.actual_pos),

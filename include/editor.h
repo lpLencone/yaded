@@ -77,6 +77,8 @@ typedef struct {
     Vec2ui c; // Cursor
     Vec2ui cs; // Selection cursor
 
+    size_t select_cur;
+
     Editor_ e_;
 
     char *clipboard;
@@ -96,8 +98,7 @@ void editor_process_key(Editor *e, EditorKey key);
 Vec2ui editor_move(Editor *e, EditorKey key, Vec2ui pos);
 Vec2ui editor_edit(Editor *e, EditorKey key, Vec2ui pos);
 
-#define editor_write(e, s) editor_write_at(e, s, (e)->c)
-Vec2ui editor_write_at(Editor *e, const char *s, Vec2ui at);
+size_t editor_write_at(Editor *e, const char *s, size_t at);
 
 #define editor_new_line(e, s) editor_new_line_at(e, s, (e)->c.y)
 #define editor_remove_line(e) editor_remove_line_at(e, (e)->c.y)
@@ -105,12 +106,9 @@ Vec2ui editor_write_at(Editor *e, const char *s, Vec2ui at);
 #define editor_break_line(e) editor_break_line_at(e, (e)->c)
 void editor_new_line_at(Editor *e, const char *s, size_t at);
 void editor_remove_line_at(Editor *e, size_t at);
-void editor_merge_line_at(Editor *e, size_t at);
-void editor_break_line_at(Editor *e, const Vec2ui pos);
 
 #define editor_get_line(e) editor_get_line_at(e, (e)->c.y)
 const char *editor_get_line_at(const Editor *e, size_t at);
-char *editor_get_data(const Editor *e);
 size_t editor_get_line_size(const Editor *e);
 
 char *editor_retrieve_selection(const Editor *e);

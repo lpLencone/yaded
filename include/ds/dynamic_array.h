@@ -103,7 +103,7 @@
 
 #define da_remove_n(da, from, n) \
     do { \
-        assert(from + n < (da)->size + 1);  \
+        assert(from + n <= (da)->size);  \
  \
         if (from + n == (da)->size) { \
             memset((da)->data + from, 0, n * TYPESIZE(da)); \
@@ -111,18 +111,18 @@
             memmove( \
                 (da)->data + from,  \
                 (da)->data + (from + n),  \
-                ((da)->size + 1 - n) * TYPESIZE(da) \
+                ((da)->size - from - n) * TYPESIZE(da) \
             ); \
         } \
         (da)->size -= n; \
  \
-        if ((da)->size < (da)->capacity / 2) { \
+        if ((da)->size < (da)->capacity / 2 && (da)->capacity / 2 > DA_INIT_CAPACITY) { \
             (da)->data = realloc((da)->data, (da)->capacity / 2); \
             assert((da)->data != NULL); \
             (da)->capacity /= 2; \
         } \
     } while (0)
-#define da_remove_at(da, at) da_remove_n(da, at, 1)
+#define da_remove_from(da, from) da_remove_n(da, from, 1)
 
 #define da_get_copy_n(da, copybuf, from, n) \
     do { \

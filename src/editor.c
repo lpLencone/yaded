@@ -45,9 +45,6 @@ static void update_pathname(List *pathname, const char *path);
 
 static void find_scope_end(Editor *e);
 
-static void line_dealloc(void *line);
-static int line_compare(const void *line1, const void *line2);
-
 Editor editor_init(const char *pathname)
 {
     Editor e = {0};
@@ -65,16 +62,10 @@ Editor editor_init(const char *pathname)
         path = strtok_r(save_ptr, "/", &save_ptr);
     }
 
-    e.lines = list_init(line_dealloc, line_compare);
     e.mode = EM_EDITING;
 
     e.e_ = (Editor_) {0};
-
     editor_open(&e, pathname);
-    if (e.lines.length == 0) {
-        Line line = line_init("");
-        list_append(&e.lines, &line, sizeof(line));
-    }
 
     e.match = vec2is(-1);
 
@@ -87,10 +78,11 @@ void editor_clear(Editor *e)
     e->c.y = 0;
     e->mode = EM_EDITING;
 
-    list_clear(&e->lines);
+    e->e_.cursor = 0;
+    e->e_.data.size = 0;
 }
 
-static_assert(sizeof(Editor) == 320, "Editor structure has changed");
+static_assert(sizeof(Editor) == 312, "Editor structure has changed");
 
 void editor_process_key(Editor *e, EditorKey key)
 {
@@ -112,7 +104,9 @@ void editor_process_key(Editor *e, EditorKey key)
                 case EK_PAGEDOWN: 
                 case EK_NEXT_EMPTY_LINE: 
                 case EK_PREV_EMPTY_LINE: {
-                    e->mode = EM_EDITING;
+                    if (e->mode == EM_SELECTION) {
+                        editor_selection_stop(e);
+                    }
 
                     if (e->mode == EM_SELECTION) {
                         if ((key == (EK_LEFT || EK_UP) && 
@@ -274,10 +268,10 @@ void editor_process_key(Editor *e, EditorKey key)
 
 static_assert(EK_COUNT == 52, "The number of editor keys has changed");
 
-Vec2ui editor_write_at(Editor *e, const char *s, Vec2ui pos)
+size_t editor_write_at(Editor *e, const char *s, size_t at)
 {
     if (e->mode == EM_BROWSING) {
-        return pos;
+        return at;
     }
 
     if (e->mode == EM_SEARCHING) {
@@ -288,53 +282,19 @@ Vec2ui editor_write_at(Editor *e, const char *s, Vec2ui pos)
 
         e->match = editor_search_next(e, e->c);
         if (e->match.x != -1) {
-            return vec2ui(e->match.x, e->match.y);
+            // return vec2ui(e->match.x, e->match.y);
         }
         
-        return pos;
+        return at;
     }
 
     if (e->mode == EM_SELECTION) {
-        pos = editor_selection_delete(e, pos, e->cs);
+        // at = editor_selection_delete(e, at, e->cs);
         e->mode = EM_EDITING;
     }
 
-    for (size_t i = 0; i < strlen(s); ++i) {
-        editor_insert_char(&e->e_, s[i]);
-    }
-
-    String_View sv_chunk = sv_from_parts(s, strlen(s));
-    while (sv_chunk.count > 0) {
-        String_View sv_line = {0};
-        char *cstr;
-
-        if (sv_try_chop_by_delim(&sv_chunk, '\n', &sv_line)) {
-            sv_c_str(cstr, sv_line);
-        } else {
-            sv_c_str(cstr, sv_chunk);
-            sv_chunk = SV_NULL;
-        }
-
-        if (pos.y >= e->lines.length) {
-            Line line = line_init_n(cstr, strlen(cstr));
-            list_insert(&e->lines, &line, sizeof(line), pos.y);
-        } else {
-            Line *line = list_get(&e->lines, pos.y);
-            if (pos.x > line->size) {
-                pos.x = line->size;
-            }
-            line_write_n(line, cstr, strlen(cstr), pos.x);
-        }
-        pos.x += strlen(cstr);
-
-        if (sv_chunk.data != NULL) { // there's a newline
-            editor_break_line_at(e, pos);
-            pos.y++;
-            pos.x = 0;
-        }
-    }
-
-    return pos;
+    at = editor_insert_sn(&e->e_, s, strlen(s));
+    return at;
 }
 
 void editor_selection_start(Editor *e, Vec2ui pos)
@@ -342,29 +302,14 @@ void editor_selection_start(Editor *e, Vec2ui pos)
     assert(e->mode != EM_SELECTION);
     e->mode = EM_SELECTION;
     e->cs = pos;
+
+    e->select_cur = e->e_.cursor;
 }
 
 void editor_selection_stop(Editor *e)
 {
     assert(e->mode == EM_SELECTION);
     e->mode = EM_EDITING;
-}
-
-char *editor_get_data(const Editor *e)
-{
-    String_Builder sb;
-    sb_zero(&sb);
-
-    for (int cy = 0; cy < (int) e->lines.length; cy++) {
-        const char *s = editor_get_line_at(e, cy);
-        sb_append_n(&sb, s, strlen(s));
-        if (cy + 1 != (int) e->lines.length) {
-            sb_append_n(&sb, "\n", 1);
-        }
-    }
-
-    sb_append_null(&sb);
-    return sb.data;
 }
 
 size_t editor_get_line_size(const Editor *e)
@@ -428,32 +373,6 @@ void editor_remove_line_at(Editor *e, size_t at)
     list_remove(&e->lines, at);
 }
 
-void editor_merge_line_at(Editor *e, size_t at)
-{
-    assert(at + 1 < e->lines.length);
-
-    Line *line       = list_get(&e->lines, at);
-    Line *line_after = list_get(&e->lines, at + 1);
-    line_write(line, line_after->s, line->size);
-
-    editor_remove_line_at(e, at + 1);
-}
-
-void editor_break_line_at(Editor *e, const Vec2ui pos)
-{
-    assert(pos.y < e->lines.length);
-
-    Line *line = list_get(&e->lines, pos.y);
-    assert(pos.x <= line->size);
-
-    Line new_line = line_init(&line->s[pos.x]);
-    list_insert(&e->lines, &new_line, sizeof(new_line), pos.y + 1);
-
-    while (pos.x < line->size) {
-        line_delete_char(line, pos.x);
-    }
-}
-
 void editor_new_line_at(Editor *e, const char *s, size_t at)
 {
     Line line = line_init(s);
@@ -462,32 +381,9 @@ void editor_new_line_at(Editor *e, const char *s, size_t at)
 
 /* Editor Operations */
 
-Vec2ui editor_delete_char_at(Editor *e, Vec2ui at)
-{
-    Line *line = list_get(&e->lines, at.y);
-    if (at.y + 1 >= e->lines.length &&
-        at.x >= line->size) 
-    {
-        return at;
-    }
-
-    if (at.x > line->size) at.x = line->size;
-
-    if (at.x == line->size) {
-        editor_merge_line_at(e, at.y);
-    } else {
-        line_delete_char(line, at.x);
-    }
-
-    return at;
-}
-
 Vec2ui editor_move(Editor *e, EditorKey key, Vec2ui pos)
 {
 #define issymbol(c) (isalnum(c) || c == '_')
-    assert(pos.y < e->lines.length);
-    Line *line = list_get(&e->lines, pos.y);
-
     switch (key) {
         case EK_LEFT: {
             EDITOR_ editor_move_char_left(&e->e_);
@@ -558,7 +454,7 @@ Vec2ui editor_move(Editor *e, EditorKey key, Vec2ui pos)
         } break;
 
         case EK_LINE_END: {
-            pos.x = line->size;
+            editor_move_line_end(&e->e_);
         } break;
 
         case EK_HOME: {
@@ -567,8 +463,7 @@ Vec2ui editor_move(Editor *e, EditorKey key, Vec2ui pos)
         } break;
 
         case EK_END: {
-            pos.y = (e->lines.length > 0) ? e->lines.length - 1 : 0;
-            pos.x = line->size;
+            
         } break;
 
         case EK_NEXT_EMPTY_LINE: {
@@ -606,15 +501,10 @@ Vec2ui editor_edit(Editor *e, EditorKey key, Vec2ui pos)
     switch (key) {
         case EK_BACKSPACE: {
             EDITOR_ editor_backspace(&e->e_);
-
-            if (pos.y == 0 && pos.x == 0) return pos;
-            pos = editor_move(e, EK_LEFT, pos);
-            pos = editor_delete_char_at(e, pos);
         } break;
 
         case EK_DELETE: {
             EDITOR_ editor_delete(&e->e_);
-            pos = editor_delete_char_at(e, pos);
         } break;
 
         case EK_BACKSPACEW: {
@@ -634,7 +524,7 @@ Vec2ui editor_edit(Editor *e, EditorKey key, Vec2ui pos)
         } break;
 
         case EK_TAB: {
-            pos = editor_write(e, "    ");
+            e->e_.cursor = editor_write_at(e, "    ", e->e_.cursor);
         } break;
 
         case EK_INDENT: {
@@ -648,12 +538,12 @@ Vec2ui editor_edit(Editor *e, EditorKey key, Vec2ui pos)
                     cyend = temp;
                 }
                 for (size_t y = cybegin; y <= cyend; y++) {
-                    editor_write_at(e, "    ", vec2ui(0, y));
+                    // editor_write_at(e, "    ", vec2ui(0, y));
                 }
                 e->mode = EM_SELECTION;
                 e->cs.x += 4;
             } else {
-                editor_write_at(e, "    ", vec2ui(0, e->c.y));
+                // editor_write_at(e, "    ", vec2ui(0, e->c.y));
             }
             e->c.x += 4;
         } break; 
@@ -703,17 +593,9 @@ Vec2ui editor_edit(Editor *e, EditorKey key, Vec2ui pos)
             pos = editor_move(e, EK_UP, pos);
         } break;
 
-        case EK_MERGE_LINE: {
-            editor_merge_line(e);
-        } break;
-
         case EK_RETURN:
         case EK_BREAK_LINE: {
-            EDITOR_ editor_insert_char(&e->e_, '\n');
-            
-            editor_break_line(e);
-            pos = editor_move(e, EK_DOWN, pos);
-            pos = editor_move(e, EK_LINE_HOME, pos);
+            e->e_.cursor = editor_insert_s(&e->e_, "\n");
         } break;
 
         default:
@@ -741,7 +623,7 @@ static void editor_action(Editor *e, EditorKey key)
         } break;
 
         case EK_PASTE: {
-            e->c = editor_paste(e);
+            // e->c = editor_paste(e);
         } break;
 
         case EK_CUT: {
@@ -939,31 +821,6 @@ static Vec2ui editor_selection_delete(Editor *e, Vec2ui begin, Vec2ui end)
         begin = end;
         end = temp;
     }
-    
-    for (int cy = end.y; cy >= (int) begin.y; cy--) {
-        if (cy != (int) end.y && cy != (int) begin.y) {
-            editor_remove_line_at(e, cy);
-            continue;
-        }
-
-        const char *s = editor_get_line_at(e, cy);
-        size_t slen = strlen(s);
-
-        size_t line_cx_begin = 0;
-        size_t line_cx_end = slen;
-        if (cy == (int) begin.y) {
-            line_cx_begin = (begin.x < slen) ? begin.x : slen;
-        }
-        if (cy == (int) end.y) {
-            line_cx_end = (end.x < slen) ? end.x : slen;
-        }
-        for (int cx = (int) line_cx_end - 1; cx >= (int) line_cx_begin; cx--) {
-            editor_delete_char_at(e, vec2ui(cx, cy));
-        }
-        if (cy == (int) begin.y && cy != (int) end.y) {
-            editor_merge_line_at(e, cy);
-        }
-    }
 
     return begin;
 }
@@ -1104,40 +961,14 @@ static void save_file(const Editor *e)
 
 static void open_file(Editor *e, const char *filename)
 {
-#if 0
-    FILE *file = fopen(filename, "r");
-    if (file == NULL) {
-        fprintf(stderr, "Could not open file \"%s\": %s\n", filename, strerror(errno));
-        exit(1);
-    }
-
-    static char chunk[64 * 1024];
-    while (!feof(file)) {
-        size_t n_bytes = fread(chunk, 1, sizeof(chunk), file);
-        String_View sv_chunk = {
-            .data = chunk,
-            .count = n_bytes
-        };
-
-        while (sv_chunk.count > 0) {
-            String_View sv_line = {0};
-            char *c_chunk;
-            
-            if (sv_try_chop_by_delim(&sv_chunk, '\n', &sv_line)) {
-                sv_c_str(c_chunk, sv_line);
-                Line line = line_init(c_chunk);
-                list_append(&e->lines, &line, sizeof(line));
-            } else {
-                sv_c_str(c_chunk, sv_chunk);
-                Line line = line_init(c_chunk);
-                list_append(&e->lines, &line, sizeof(line));
-                sv_chunk = SV_NULL;
-            }
-            free(c_chunk);
-        }
-    }
-#endif
     editor_load_from_file(&e->e_, filename);
+}
+
+static int entrycmp(const void *ap, const void *bp)
+{
+    const char *a = *(const char**)ap;
+    const char *b = *(const char**)bp;
+    return strcmp(a, b);
 }
 
 static void open_dir(Editor *e, const char *dirname)
@@ -1148,11 +979,13 @@ static void open_dir(Editor *e, const char *dirname)
         exit(1);
     }
 
+    da_var_zero(entries, char *);
+
     errno = 0;
     struct dirent *direntry;
     while ((direntry = readdir(dirp)) != NULL) {
-        Line line = line_init(direntry->d_name);
-        list_append(&e->lines, &line, sizeof(line));
+        char *s = strdup(direntry->d_name);
+        da_append(&entries, &s);
     }
 
     if (errno) {
@@ -1163,7 +996,17 @@ static void open_dir(Editor *e, const char *dirname)
         exit(1);
     }
 
-    list_quicksort(&e->lines);
+    qsort(entries.data, entries.size, TYPESIZE(&entries), entrycmp);
+
+    size_t cur = e->e_.cursor;
+    for (size_t i = 0; i < entries.size; i++) {
+        cur = editor_write_at(e, entries.data[i], cur);
+        if (i + 1 != entries.size) {
+            cur = editor_insert_s_at(&e->e_, "\n", cur);
+        }
+    }
+
+    da_end(&entries);
 }
 
 static const char *get_pathname_cstr(const List *pathname)
@@ -1216,14 +1059,4 @@ static void find_scope_end(Editor *e)
         if      (*strchrnul("{[(", s[e->c.x]) != '\0') scope++;
         else if (*strchrnul("}])", s[e->c.x]) != '\0') scope--;
     }
-}
-
-static void line_dealloc(void *line)
-{
-    line_destroy((Line *) line);
-}
-
-static int line_compare(const void *line1, const void *line2)
-{
-    return strcmp(((Line *) line1)->s, ((Line *) line2)->s);
 }
