@@ -490,41 +490,19 @@ Vec2ui editor_move(Editor *e, EditorKey key, Vec2ui pos)
 
     switch (key) {
         case EK_LEFT: {
-            EDITOR_ editor_move_char_left(&e->e_); break;
-            if (pos.x > line->size) {
-                pos.x = line->size;
-            }
-
-            if (pos.x > 0) {
-                pos.x--;
-            } else if (pos.y > 0) {
-                pos = editor_move(e, EK_UP, pos);
-                pos = editor_move(e, EK_LINE_END, pos);
-            }
+            EDITOR_ editor_move_char_left(&e->e_);
         } break;
 
         case EK_RIGHT: {
-            EDITOR_ editor_move_char_right(&e->e_); break;
-            if (pos.x < line->size) {
-                pos.x++;
-            } else if (pos.y + 1 < e->lines.length) {
-                pos = editor_move(e, EK_DOWN, pos);
-                pos = editor_move(e, EK_LINE_HOME, pos);
-            }
+            EDITOR_ editor_move_char_right(&e->e_);
         } break;
 
         case EK_UP: {
-            EDITOR_ editor_move_line_up(&e->e_); break; 
-            if (pos.y > 0) {
-                pos.y--;
-            }
+            EDITOR_ editor_move_line_up(&e->e_);
         } break;
 
         case EK_DOWN: {
-            EDITOR_ editor_move_line_down(&e->e_); break;
-            if (pos.y + 1 < e->lines.length) {
-                pos.y++;
-            }
+            EDITOR_ editor_move_line_down(&e->e_);
         } break;
 
         case EK_LEFTW: {
