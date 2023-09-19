@@ -400,55 +400,15 @@ Vec2ui editor_move(Editor *e, EditorKey key, Vec2ui pos)
         } break;
 
         case EK_LEFTW: {
-            pos = editor_move(e, EK_LEFT, pos);
-
-            const char *s = editor_get_line_at(e, pos.y);
-            if (isspace(s[pos.x])) {
-                while (isspace(s[pos.x]) && pos.x > 0) {
-                    s = editor_get_line_at(e, pos.y);
-                    pos = editor_move(e, EK_LEFT, pos);
-                }
-            } else if (issymbol(s[pos.x])) {
-                while (issymbol(s[pos.x]) && pos.x > 0) {
-                    s = editor_get_line_at(e, pos.y);
-                    pos = editor_move(e, EK_LEFT, pos);
-                }
-            } else {
-                while (!issymbol(s[pos.x]) && !isspace(s[pos.x]) && pos.x > 0) {
-                    s = editor_get_line_at(e, pos.y);
-                    pos = editor_move(e, EK_LEFT, pos);
-                }
-            }
-
-            if (pos.x != 0) {
-                pos = editor_move(e, EK_RIGHT, pos);
-            }
+            editor_move_word_left(&e->e_);
         } break;
 
         case EK_RIGHTW: {
-            pos = editor_move(e, EK_RIGHT, pos);
-
-            const char *s = editor_get_line_at(e, pos.y);
-            if (isspace(s[pos.x])) {
-                while (isspace(s[pos.x]) && pos.x < strlen(s)) {
-                    s = editor_get_line_at(e, pos.y);
-                    pos = editor_move(e, EK_RIGHT, pos);
-                }
-            } else if (issymbol(s[pos.x])) {
-                while (issymbol(s[pos.x]) && pos.x < strlen(s)) {
-                    s = editor_get_line_at(e, pos.y);
-                    pos = editor_move(e, EK_RIGHT, pos);
-                }
-            } else {
-                while (!issymbol(s[pos.x]) && !isspace(s[pos.x]) && pos.x < strlen(s)) {
-                    s = editor_get_line_at(e, pos.y);
-                    pos = editor_move(e, EK_RIGHT, pos);
-                }
-            }
+            editor_move_word_right(&e->e_);
         } break;
 
         case EK_LINE_HOME: {
-            pos.x = 0;
+            editor_move_line_start(&e->e_);
         } break;
 
         case EK_LINE_END: {
@@ -456,12 +416,11 @@ Vec2ui editor_move(Editor *e, EditorKey key, Vec2ui pos)
         } break;
 
         case EK_HOME: {
-            pos.x = 0;
-            pos.y = 0;
+            e->e_.cursor = 0;
         } break;
 
         case EK_END: {
-            
+            e->e_.cursor = e->e_.data.size;
         } break;
 
         case EK_NEXT_EMPTY_LINE: {
@@ -476,14 +435,6 @@ Vec2ui editor_move(Editor *e, EditorKey key, Vec2ui pos)
             while (pos.y > 0 && editor_get_line_size(e) > 0) {
                 pos = editor_move(e, EK_UP, pos);
             }
-        } break;
-
-        case EK_PAGEUP: {
-            // TODO
-        } break;
-
-        case EK_PAGEDOWN: {
-            // TODO
         } break;
 
         default:
@@ -506,23 +457,26 @@ Vec2ui editor_edit(Editor *e, EditorKey key, Vec2ui pos)
         } break;
 
         case EK_BACKSPACEW: {
-            e->mode = EM_SELECTION;
-            e->cs = pos;
+            editor_selection_start(e, e->c);
             pos = editor_move(e, EK_LEFTW, pos);
             e->e_.cursor = editor_selection_delete(e, e->e_.cursor, e->select_cur);
-            e->mode = EM_EDITING;
+            editor_selection_stop(e);
         } break;
 
         case EK_DELETEW: {
-            e->mode = EM_SELECTION;
-            e->cs = pos;
+            editor_selection_start(e, e->c);
             pos = editor_move(e, EK_RIGHTW, pos);
             e->e_.cursor = editor_selection_delete(e, e->e_.cursor, e->select_cur);
-            e->mode = EM_EDITING;
+            editor_selection_stop(e);
         } break;
 
         case EK_TAB: {
-            e->e_.cursor = editor_write_at(e, "    ", e->e_.cursor);
+            Line_ line = editor_get_line_at_(&e->e_, e->e_.cursor);
+            size_t col = e->e_.cursor - line.begin;
+            size_t tabstop = 4 - (col % 4);
+            for (size_t i = 0; i < tabstop; i++) {
+                e->e_.cursor = editor_write_at(e, " ", e->e_.cursor);
+            }
         } break;
 
         case EK_INDENT: {
