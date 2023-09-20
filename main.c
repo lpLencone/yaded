@@ -58,8 +58,7 @@ typedef struct {
         float selection_width;
 
         float height;
-        size_t last_cx;
-        size_t last_cy;
+        size_t last_pos;
         Uint32 last_moved; // in milisec
     } cur;
     struct {
@@ -273,9 +272,9 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
     {
         Vec2f pos = {0};
         size_t last_i = 0;
-        const char *data = e->e_.data.data;
-        for (size_t i = 0; i < e->e_.tokens.size; ++i) {
-            Token token = e->e_.tokens.data[i];
+        const char *data = e->be.data.data;
+        for (size_t i = 0; i < e->be.tokens.size; ++i) {
+            Token token = e->be.tokens.data[i];
             if (token.kind == TOKEN_KEYWORD) {
                 sr_set_shader(sr, SHADER_PRIDE);
             } else {
@@ -339,18 +338,18 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
             // Render selection background
             if (e->mode == EM_SELECTION) {
                 size_t select_begin = e->select_cur;
-                size_t select_end = e->e_.cursor;
+                size_t select_end = e->be.cursor;
 
                 if (select_begin > select_end) {
                     size_t tmp = select_begin;
                     select_begin = select_end;
                     select_end = tmp;
                 }
-                size_t row_begin = editor_cursor_row(&e->e_, select_begin);
-                size_t row_end = editor_cursor_row(&e->e_, select_end);
+                size_t row_begin = be_cursor_row(&e->be, select_begin);
+                size_t row_end = be_cursor_row(&e->be, select_end);
 
                 for (size_t row = row_begin; row <= row_end; row++) {
-                    Line_ line = e->e_.lines.data[row];
+                    Line_ line = e->be.lines.data[row];
 
                     float select_col_begin = 0;
                     if (row == row_begin) {
@@ -363,10 +362,10 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
                     }
 
                     size_t select_render_begin = 
-                        ftr_get_s_width_n(ftr, &e->e_.data.data[line.begin], select_col_begin);
+                        ftr_get_s_width_n(ftr, &e->be.data.data[line.begin], select_col_begin);
 
                     size_t select_render_end = 
-                        ftr_get_s_width_n(ftr, &e->e_.data.data[line.begin], select_col_end);
+                        ftr_get_s_width_n(ftr, &e->be.data.data[line.begin], select_col_end);
 
                     size_t select_render_width = select_render_end - select_render_begin;
 
@@ -380,13 +379,13 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
         } break;
 
         case EM_BROWSING: {
-            size_t row = editor_cursor_row(&e->e_, e->e_.cursor);
+            size_t row = be_cursor_row(&e->be, e->be.cursor);
 
-            Line_ line = e->e_.lines.data[row];
+            Line_ line = e->be.lines.data[row];
             size_t line_size = line.end - line.begin;
 
             scr->cur.actual_width = 
-                ftr_get_s_width_n(ftr, &e->e_.data.data[line.begin], line_size);
+                ftr_get_s_width_n(ftr, &e->be.data.data[line.begin], line_size);
 
             scr->cur.render_width +=
                 (scr->cur.actual_width - scr->cur.render_width) * 10 * DELTA_TIME;
@@ -460,10 +459,9 @@ void update_last_moved(Screen *scr)
     scr->cur.last_moved = SDL_GetTicks();
 }
 
-void cursor_move(Screen *scr, size_t cx, size_t cy)
+void cursor_move(Screen *scr, size_t pos)
 {
-    scr->cur.last_cx = cx;
-    scr->cur.last_cy = cy;
+    scr->cur.last_pos = pos;
 }
 
 static FreeType_Renderer ftr = {0};
@@ -757,40 +755,38 @@ int main(int argc, char *argv[])
                 static_assert(EK_COUNT == 52, "The number of editor keys has changed");
 
                 case SDL_TEXTINPUT: {
-                    e.e_.cursor = editor_write_at(&e, event.text.text, e.e_.cursor);
+                    e.be.cursor = editor_write_at(&e, event.text.text, e.be.cursor);
                     update_last_moved(&scr);
                 } break;
             }
         }
 
-#if 1
         // Update cursor position on the screen
-        if (e.e_.lines.size > 0) {
-            size_t row = editor_cursor_row(&e.e_, e.e_.cursor);
-            Line_ line = e.e_.lines.data[row];
-            size_t col = e.e_.cursor - line.begin;
+        if (e.be.lines.size > 0) {
+            size_t row = be_cursor_row(&e.be, e.be.cursor);
+            Line_ line = e.be.lines.data[row];
+            size_t col = e.be.cursor - line.begin;
             size_t line_size = line.end - line.begin;
             scr.cur.actual_pos.y = row * FONT_SIZE;
             scr.cur.actual_pos.x = (e.mode != EM_BROWSING)
-                ? ftr_get_s_width_n(&ftr, &e.e_.data.data[line.begin], col > line_size ? line_size : col)
-                : ftr_get_s_width_n(&ftr, &e.e_.data.data[line.begin], line_size) / 2;
+                ? ftr_get_s_width_n(&ftr, &e.be.data.data[line.begin], col > line_size ? line_size : col)
+                : ftr_get_s_width_n(&ftr, &e.be.data.data[line.begin], line_size) / 2;
         }
         
-#else
         // Update Cursor
-        if (e.c.y != scr.cur.last_cy) {
-            const char *s = (scr.cur.last_cy < e.lines.length) 
-                ? editor_get_line_at(&e, scr.cur.last_cy) 
-                : NULL;
-                
-            const float last_width = (s != NULL) ? ftr_get_s_width_n(&ftr, s, e.c.x) : 0;
-            size_t ecx = ftr_get_glyph_index_near(&ftr, editor_get_line(&e), last_width);
-            cursor_move(&scr, ecx, e.c.y);
-        }
-        if (e.c.x != scr.cur.last_cx) {
-            cursor_move(&scr, e.c.x, e.c.y);
-        }
-#endif
+        // if (e.be.cursor != scr.cur.last_pos) {
+        //     float last_width = 0;
+        //     if (scr.cur.last_pos < e.be.data.size) {
+        //         Line_ last_line = editor_get_line_at_(&e.be, scr.cur.last_pos);
+        //         size_t col = scr.cur.last_pos - last_line.begin;
+        //         last_width = ftr_get_s_width_n(&ftr, &e.be.data.data[last_line.begin], col);   
+        //     }
+        //     Line_ line = editor_get_line_at_(&e.be, e.be.cursor);
+        //     size_t cur = ftr_get_glyph_index_near(&ftr, &e.be.data.data[line.begin], last_width);
+
+        //     cursor_move(&scr, cur);
+        // }
+
         scr.cur.vel = vec2f_mul(
             vec2f_sub(scr.cur.render_pos, scr.cur.actual_pos),
             vec2fs(CUR_MOVE_VEL)

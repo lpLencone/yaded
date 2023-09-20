@@ -40,8 +40,8 @@ static void editor_search_start(Editor *e);
 static Vec2i editor_search_next(Editor *e, Vec2ui pos);
 static Vec2i editor_search_prev(Editor *e, Vec2ui pos);
 
-static const char *get_pathname_cstr(const List *pathname);
-static void update_pathname(List *pathname, const char *path);
+static const char *get_pathname_cstr(const Editor *e);
+static void update_pathname(Editor *e, const char *path);
 
 static void find_scope_end(Editor *e);
 
@@ -49,7 +49,7 @@ Editor editor_init(const char *pathname)
 {
     Editor e = {0};
 
-    e.pathname = list_init(NULL, NULL);
+    da_zero(&e.pathname);
     e.clipboard = NULL;
 
     char cwdbuf[256];
@@ -58,13 +58,13 @@ Editor editor_init(const char *pathname)
     char *path;
     path = strtok_r(cwdbuf, "/", &save_ptr);
     while (path != NULL) {
-        list_append(&e.pathname, path, strlen(path) + 1);
+        da_append(&e.pathname, &path);
         path = strtok_r(save_ptr, "/", &save_ptr);
     }
 
     e.mode = EM_EDITING;
 
-    e.e_ = (Editor_) {0};
+    e.be = (Basic_Editor) {0};
     editor_open(&e, pathname);
 
     e.match = vec2is(-1);
@@ -78,11 +78,11 @@ void editor_clear(Editor *e)
     e->c.y = 0;
     e->mode = EM_EDITING;
 
-    e->e_.cursor = 0;
-    e->e_.data.size = 0;
+    e->be.cursor = 0;
+    e->be.data.size = 0;
 }
 
-static_assert(sizeof(Editor) == 312, "Editor structure has changed");
+static_assert(sizeof(Editor) == 304, "Editor structure has changed");
 
 void editor_process_key(Editor *e, EditorKey key)
 {
@@ -134,7 +134,7 @@ void editor_process_key(Editor *e, EditorKey key)
                 case EK_BREAK_LINE:
                 case EK_TAB: {
                     if (e->mode == EM_SELECTION) {
-                        e->e_.cursor = editor_selection_delete(e, e->e_.cursor, e->select_cur);
+                        e->be.cursor = editor_selection_delete(e, e->be.cursor, e->select_cur);
                         e->mode = EM_EDITING;
                         if (key == EK_BACKSPACE || key == EK_DELETE ||
                             key == EK_BACKSPACEW || key == EK_DELETEW) 
@@ -293,7 +293,7 @@ size_t editor_write_at(Editor *e, const char *s, size_t at)
         e->mode = EM_EDITING;
     }
 
-    at = editor_insert_sn(&e->e_, s, strlen(s));
+    at = be_insert_sn(&e->be, s, strlen(s));
     return at;
 }
 
@@ -301,7 +301,7 @@ void editor_selection_start(Editor *e, Vec2ui pos)
 {
     assert(e->mode != EM_SELECTION);
     e->mode = EM_SELECTION;
-    e->select_cur = e->e_.cursor;
+    e->select_cur = e->be.cursor;
 }
 
 void editor_selection_stop(Editor *e)
@@ -384,43 +384,43 @@ Vec2ui editor_move(Editor *e, EditorKey key, Vec2ui pos)
 #define issymbol(c) (isalnum(c) || c == '_')
     switch (key) {
         case EK_LEFT: {
-            editor_move_char_left(&e->e_);
+            be_move_char_left(&e->be);
         } break;
 
         case EK_RIGHT: {
-            editor_move_char_right(&e->e_);
+            be_move_char_right(&e->be);
         } break;
 
         case EK_UP: {
-            editor_move_line_up(&e->e_);
+            be_move_line_up(&e->be);
         } break;
 
         case EK_DOWN: {
-            editor_move_line_down(&e->e_);
+            be_move_line_down(&e->be);
         } break;
 
         case EK_LEFTW: {
-            editor_move_word_left(&e->e_);
+            be_move_word_left(&e->be);
         } break;
 
         case EK_RIGHTW: {
-            editor_move_word_right(&e->e_);
+            be_move_word_right(&e->be);
         } break;
 
         case EK_LINE_HOME: {
-            editor_move_line_start(&e->e_);
+            be_move_line_start(&e->be);
         } break;
 
         case EK_LINE_END: {
-            editor_move_line_end(&e->e_);
+            be_move_line_end(&e->be);
         } break;
 
         case EK_HOME: {
-            e->e_.cursor = 0;
+            e->be.cursor = 0;
         } break;
 
         case EK_END: {
-            e->e_.cursor = e->e_.data.size;
+            e->be.cursor = e->be.data.size;
         } break;
 
         case EK_NEXT_EMPTY_LINE: {
@@ -449,33 +449,33 @@ Vec2ui editor_edit(Editor *e, EditorKey key, Vec2ui pos)
 {
     switch (key) {
         case EK_BACKSPACE: {
-            editor_backspace(&e->e_);
+            be_backspace(&e->be);
         } break;
 
         case EK_DELETE: {
-            editor_delete(&e->e_);
+            be_delete(&e->be);
         } break;
 
         case EK_BACKSPACEW: {
             editor_selection_start(e, e->c);
             pos = editor_move(e, EK_LEFTW, pos);
-            e->e_.cursor = editor_selection_delete(e, e->e_.cursor, e->select_cur);
+            e->be.cursor = editor_selection_delete(e, e->be.cursor, e->select_cur);
             editor_selection_stop(e);
         } break;
 
         case EK_DELETEW: {
             editor_selection_start(e, e->c);
             pos = editor_move(e, EK_RIGHTW, pos);
-            e->e_.cursor = editor_selection_delete(e, e->e_.cursor, e->select_cur);
+            e->be.cursor = editor_selection_delete(e, e->be.cursor, e->select_cur);
             editor_selection_stop(e);
         } break;
 
         case EK_TAB: {
-            Line_ line = editor_get_line_at_(&e->e_, e->e_.cursor);
-            size_t col = e->e_.cursor - line.begin;
+            Line_ line = be_get_line_at_(&e->be, e->be.cursor);
+            size_t col = e->be.cursor - line.begin;
             size_t tabstop = 4 - (col % 4);
             for (size_t i = 0; i < tabstop; i++) {
-                e->e_.cursor = editor_write_at(e, " ", e->e_.cursor);
+                e->be.cursor = editor_write_at(e, " ", e->be.cursor);
             }
         } break;
 
@@ -547,7 +547,7 @@ Vec2ui editor_edit(Editor *e, EditorKey key, Vec2ui pos)
 
         case EK_RETURN:
         case EK_BREAK_LINE: {
-            e->e_.cursor = editor_insert_s(&e->e_, "\n");
+            e->be.cursor = be_insert_s(&e->be, "\n");
         } break;
 
         default:
@@ -580,7 +580,7 @@ static void editor_action(Editor *e, EditorKey key)
 
         case EK_CUT: {
             editor_selection_copy(e);
-            e->e_.cursor = editor_selection_delete(e, e->e_.cursor, e->select_cur);
+            e->be.cursor = editor_selection_delete(e, e->be.cursor, e->select_cur);
         } break;
 
         default:
@@ -602,6 +602,7 @@ static void editor_browsing(Editor *e, EditorKey key)
         } break;
 
         case EK_RETURN: {
+            Line_ line = be_get_line_at_(&e->be, e->be.cursor);
             editor_open(e, editor_get_line(e));
         } break;
 
@@ -774,7 +775,7 @@ static size_t editor_selection_delete(Editor *e, size_t begin, size_t end)
         end = temp;
     }
 
-    editor_delete_sn_from(&e->e_, end - begin, begin);
+    be_delete_sn_from(&e->be, end - begin, begin);
 
     return begin;
 }
@@ -874,8 +875,10 @@ void editor_open(Editor *e, const char *path)
 {
     assert(path != NULL);
 
-    update_pathname(&e->pathname, path);
-    const char *pathname = get_pathname_cstr(&e->pathname);
+    printf("%s\n", get_pathname_cstr(e));
+    update_pathname(e, path);
+    printf("%s\n", get_pathname_cstr(e));
+    const char *pathname = get_pathname_cstr(e);
     errno = 0;
     struct stat statbuf;
     if (stat(pathname, &statbuf) != 0) {
@@ -898,7 +901,7 @@ void editor_open(Editor *e, const char *path)
 
 static void save_file(const Editor *e)
 {
-    const char *pathname = get_pathname_cstr(&e->pathname);
+    const char *pathname = get_pathname_cstr(e);
     FILE *file = fopen(pathname, "w");
     if (file == NULL) {
         fprintf(stderr, "Could not open file \"%s\": %s\n", pathname, strerror(errno));
@@ -915,7 +918,7 @@ static void save_file(const Editor *e)
 
 static void open_file(Editor *e, const char *filename)
 {
-    editor_load_from_file(&e->e_, filename);
+    be_load_from_file(&e->be, filename);
 }
 
 static int entrycmp(const void *ap, const void *bp)
@@ -952,49 +955,69 @@ static void open_dir(Editor *e, const char *dirname)
 
     qsort(entries.data, entries.size, TYPESIZE(&entries), entrycmp);
 
-    size_t cur = e->e_.cursor;
+    size_t cur = e->be.cursor;
     for (size_t i = 0; i < entries.size; i++) {
         cur = editor_write_at(e, entries.data[i], cur);
         if (i + 1 != entries.size) {
-            cur = editor_insert_s_at(&e->e_, "\n", cur);
+            cur = be_insert_s_at(&e->be, "\n", cur);
         }
     }
 
     da_end(&entries);
 }
 
-static const char *get_pathname_cstr(const List *pathname)
+static const char *get_pathname_cstr(const Editor *e)
 {
-    if (pathname->length == 0) {
+    if (e->pathname.size == 0) {
         return "/";
     }
 
-    static char buffer[256] = {0};
-    char *buffer_ptr = buffer;
-    for (size_t i = 0; i < pathname->length; i++) {
-        *buffer_ptr++ = '/';
-        const char *path = (char *) list_get(pathname, i);
-        strcpy(buffer_ptr, path);
-        buffer_ptr += strlen(path);
+    String_Builder pathbuf;
+    sb_zero(&pathbuf);
+
+    for (size_t i = 0; i < e->pathname.size; i++) {
+        sb_append_cstr(&pathbuf, "/");
+        sb_append_cstr(&pathbuf, e->pathname.data[i]);
+        printf("%s\n", e->pathname.data[i]);
     }
-    *buffer_ptr = '\0';
-    return buffer;
+    sb_append_null(&pathbuf);
+    return pathbuf.data;
 }
 
-static void update_pathname(List *pathname, const char *path)
+static void update_pathname(Editor *e, const char *path)
 {
-    assert(pathname != NULL && path != NULL);
-
     char *path_dump = strdup(path);
     char *save_ptr;
     path = strtok_r(path_dump, "/", &save_ptr);
     while (path != NULL) {
         if (strcmp(path, "..") == 0) {
-            if (pathname->length > 0) {
-                list_remove(pathname, pathname->length - 1);
+            if (e->pathname.size > 0) {
+                // da_remove_from(&e->pathname, e->pathname.size - 1);
+                size_t n = 1;
+                size_t from = e->pathname.size - 1;
+                #define da &e->pathname
+                assert(from + n <= (da)->size);  
+        
+                if (from + n == (da)->size) { 
+                    memset((da)->data + from, 0, n * TYPESIZE(da)); 
+                } else { 
+                    memmove( 
+                        (da)->data + from,  
+                        (da)->data + (from + n),  
+                        ((da)->size - from - n) * TYPESIZE(da) 
+                    ); 
+                } 
+                (da)->size -= n; 
+        
+                if ((da)->size < (da)->capacity / 2 && (da)->capacity / 2 > DA_INIT_CAPACITY) { 
+                    (da)->data = realloc((da)->data, (da)->capacity / 2); 
+                    assert((da)->data != NULL); 
+                    (da)->capacity /= 2; 
+                } 
+                #undef da
             }
         } else if (strcmp(path, ".") != 0) {
-            list_append(pathname, path, strlen(path) + 1);
+            da_append(&e->pathname, &path);
         }
         path = strtok_r(save_ptr, "/", &save_ptr);
     }

@@ -7,7 +7,7 @@
 #include "la.h"
 
 #define EDITOR_
-#include "editor_/editor.h"
+#include "be/basic_editor.h"
 
 typedef enum {
     EK_LEFT,
@@ -79,7 +79,7 @@ typedef struct {
 
     size_t select_cur;
 
-    Editor_ e_;
+    Basic_Editor be;
 
     char *clipboard;
 
@@ -88,7 +88,7 @@ typedef struct {
 
     EditorMode mode;
     
-    List pathname;
+    da_var(pathname, char *);
 } Editor;
 
 Editor editor_init(const char *pathname);
