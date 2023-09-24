@@ -5,13 +5,7 @@
 
 #include <stddef.h>
 
-#ifndef debug_print
-#include <stdio.h>
-#define debug_print printf("%15s : %4d : %-20s ", __FILE__, __LINE__, __func__);
-#endif
-#ifndef debug_println
-#define debug_println debug_print puts("");
-#endif
+
 
 typedef enum {
     TOKEN_END = 0,

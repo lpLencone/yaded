@@ -16,14 +16,14 @@ typedef enum {
     EK_DOWN,
     EK_LEFTW,
     EK_RIGHTW,
-    EK_LINE_HOME,
+    EK_LINE_HOME, // change line_home to home and home to file_home
     EK_LINE_END,
     EK_HOME,
     EK_END,
     EK_PAGEUP,
     EK_PAGEDOWN,
-    EK_NEXT_EMPTY_LINE,
-    EK_PREV_EMPTY_LINE,
+    EK_NEXT_PARAGRAPH,
+    EK_PREV_PARAGRAPH,
     EK_BACKSPACE,
     EK_BACKSPACEW,
     EK_DELETE,
@@ -51,8 +51,8 @@ typedef enum {
     EK_SELECT_NEXT_BLOCK,
     EK_SELECT_HOME,
     EK_SELECT_END,
-    EK_SELECT_NEXT_EMPTY_LINE,
-    EK_SELECT_PREV_EMPTY_LINE,
+    EK_SELECT_NEXT_PARAGRAPH,
+    EK_SELECT_PREV_PARAGRAPH,
     EK_SELECT_ALL,
     EK_SAVE,
     EK_SEARCH_START,
@@ -88,14 +88,14 @@ typedef struct {
 
     EditorMode mode;
     
-    da_var(pathname, char *);
+    String_Builder pathname;
 } Editor;
 
-Editor editor_init(const char *pathname);
+Editor editor_init(void);
 void editor_clear(Editor *e);
 
 void editor_process_key(Editor *e, EditorKey key);
-Vec2ui editor_move(Editor *e, EditorKey key, Vec2ui pos);
+size_t editor_move(Editor *e, EditorKey key, size_t cur);
 Vec2ui editor_edit(Editor *e, EditorKey key, Vec2ui pos);
 
 size_t editor_write_at(Editor *e, const char *s, size_t at);
@@ -113,7 +113,7 @@ size_t editor_get_line_size(const Editor *e);
 
 char *editor_retrieve_selection(const Editor *e);
 
-void editor_open(Editor *e, const char *pathname);
+void editor_open(Editor *e, const char *path, size_t pathlen);
 
 void editor_selection_start(Editor *e, Vec2ui pos);
 void editor_selection_stop(Editor *e);

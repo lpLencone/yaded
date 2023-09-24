@@ -96,9 +96,12 @@ void MessageCallback(
     (void) length;
     (void) userParam;
     
-    fprintf(stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
-            (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
-            type, severity, message);
+    // fprintf(stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
+    //         (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
+    //         type, severity, message);
+    (void) type;
+    (void) severity;
+    (void) message;
 }
 
 void gl_attr(void)
@@ -221,9 +224,8 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
     }
 
     // Render Glyphs
-#if 0
     sr_set_shader(sr, SHADER_TEXT);
-    const char *data = editor_get_data(e);
+    const char *data = e->be.data.data;
     Vec2f pos = {0};
     float line_width = 0;
     float max_line_width = 0;
@@ -266,51 +268,6 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
 
         if (line_width > max_line_width) max_line_width = line_width;
     }
-#else
-    float line_width = 0;
-    float max_line_width = 0;
-    {
-        Vec2f pos = {0};
-        size_t last_i = 0;
-        const char *data = e->be.data.data;
-        for (size_t i = 0; i < e->be.tokens.size; ++i) {
-            Token token = e->be.tokens.data[i];
-            if (token.kind == TOKEN_KEYWORD) {
-                sr_set_shader(sr, SHADER_PRIDE);
-            } else {
-                sr_set_shader(sr, SHADER_TEXT);
-            }
-            Vec4f color;
-            switch (token.kind) {
-                case TOKEN_BLOCK_COMMENT:
-                case TOKEN_INLINE_COMMENT: 
-                                    color = hex_to_vec4f(0x905425FF); break;
-                case TOKEN_CHRLIT:
-                case TOKEN_STRLIT:  color = hex_to_vec4f(0xAA8A60FF); break;
-                case TOKEN_HASH:    color = hex_to_vec4f(0x9090B0FF); break;
-                case TOKEN_SYMBOL:  color = hex_to_vec4f(0xCFCFCFFF); break;
-                case TOKEN_NUMLIT:  color = hex_to_vec4f(0x90BB90FF); break;
-                case TOKEN_INVALID: color = hex_to_vec4f(0xB06060FF); break;
-                default:            color = hex_to_vec4f(0xCFCFCFFF); break;
-            }
-
-            for (size_t i = 0; i < token.len; i++) {
-                if (data[last_i + i] == '\n') {
-                    line_width = pos.x;
-
-                    pos.y -= (float) FONT_SIZE;
-                    pos.x = 0;
-                } else {
-                    pos = ftr_render_s_n(ftr, sr, data + last_i + i, 1, pos, color);
-                    line_width = pos.x;
-                }
-            }
-            last_i += token.len;
-
-            if (line_width > max_line_width) max_line_width = line_width;
-        }
-    }
-#endif
 
     // Render Cursor
     sr_set_shader(sr, SHADER_COLOR);
@@ -338,7 +295,7 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
             // Render selection background
             if (e->mode == EM_SELECTION) {
                 size_t select_begin = e->select_cur;
-                size_t select_end = e->be.cursor;
+                size_t select_end = e->be.cur;
 
                 if (select_begin > select_end) {
                     size_t tmp = select_begin;
@@ -353,19 +310,19 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
 
                     float select_col_begin = 0;
                     if (row == row_begin) {
-                        select_col_begin = select_begin - line.begin;
+                        select_col_begin = select_begin - line.home;
                     }
 
-                    float select_col_end = line.end - line.begin;
+                    float select_col_end = line.end - line.home;
                     if (row == row_end) {
-                        select_col_end = select_end - line.begin;
+                        select_col_end = select_end - line.home;
                     }
 
                     size_t select_render_begin = 
-                        ftr_get_s_width_n(ftr, &e->be.data.data[line.begin], select_col_begin);
+                        ftr_get_s_width_n(ftr, &e->be.data.data[line.home], select_col_begin);
 
                     size_t select_render_end = 
-                        ftr_get_s_width_n(ftr, &e->be.data.data[line.begin], select_col_end);
+                        ftr_get_s_width_n(ftr, &e->be.data.data[line.home], select_col_end);
 
                     size_t select_render_width = select_render_end - select_render_begin;
 
@@ -379,13 +336,13 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
         } break;
 
         case EM_BROWSING: {
-            size_t row = be_cursor_row(&e->be, e->be.cursor);
+            size_t row = be_cursor_row(&e->be, e->be.cur);
 
             Line_ line = e->be.lines.data[row];
-            size_t line_size = line.end - line.begin;
+            size_t line_size = line.end - line.home;
 
             scr->cur.actual_width = 
-                ftr_get_s_width_n(ftr, &e->be.data.data[line.begin], line_size);
+                ftr_get_s_width_n(ftr, &e->be.data.data[line.home], line_size);
 
             scr->cur.render_width +=
                 (scr->cur.actual_width - scr->cur.render_width) * 10 * DELTA_TIME;
@@ -467,10 +424,8 @@ void cursor_move(Screen *scr, size_t pos)
 static FreeType_Renderer ftr = {0};
 static Simple_Renderer sr = {0};
 
-int main(int argc, char *argv[])
+int main(void)
 {
-    assert(argc > 1);
-
     Editor e;
     Screen scr = {0};
     SDL_Window *window;
@@ -488,7 +443,7 @@ int main(int argc, char *argv[])
         FT_Face face = FT_init();
         renderers_init(&sr, &ftr, face);
         
-        e = editor_init(argv[1]);
+        e = editor_init();
         scr.cam.scale = CAM_INIT_SCALE;
         scr.cur.actual_width = CUR_INIT_WIDTH;
         scr.cur.render_width = CUR_INIT_WIDTH;
@@ -516,9 +471,9 @@ int main(int argc, char *argv[])
 
                         case SDLK_UP: {
                             if (SDL_CTRL && SDL_SHIFT) {
-                                editor_process_key(&e, EK_SELECT_PREV_EMPTY_LINE);
+                                editor_process_key(&e, EK_SELECT_PREV_PARAGRAPH);
                             } else if (SDL_CTRL) {
-                                editor_process_key(&e, EK_PREV_EMPTY_LINE);
+                                editor_process_key(&e, EK_PREV_PARAGRAPH);
                             } else if (SDL_SHIFT) {
                                 editor_process_key(&e, EK_SELECT_UP);
                             } else {
@@ -529,9 +484,9 @@ int main(int argc, char *argv[])
 
                         case SDLK_DOWN: {
                             if (SDL_CTRL && SDL_SHIFT) {
-                                editor_process_key(&e, EK_SELECT_NEXT_EMPTY_LINE);
+                                editor_process_key(&e, EK_SELECT_NEXT_PARAGRAPH);
                             } else if (SDL_CTRL) {
-                                editor_process_key(&e, EK_NEXT_EMPTY_LINE);
+                                editor_process_key(&e, EK_NEXT_PARAGRAPH);
                             } else if (SDL_SHIFT) {
                                 editor_process_key(&e, EK_SELECT_DOWN);
                             } else {
@@ -660,7 +615,7 @@ int main(int argc, char *argv[])
 
                         case SDLK_o: {
                             if (SDL_CTRL) {
-                                editor_open(&e, "..");
+                                editor_open(&e, "..", strlen(".."));
                             }
                         } break;
 
@@ -755,34 +710,34 @@ int main(int argc, char *argv[])
                 static_assert(EK_COUNT == 52, "The number of editor keys has changed");
 
                 case SDL_TEXTINPUT: {
-                    e.be.cursor = editor_write_at(&e, event.text.text, e.be.cursor);
+                    e.be.cur = editor_write_at(&e, event.text.text, e.be.cur);
                     update_last_moved(&scr);
                 } break;
             }
         }
 
-        // Update cursor position on the screen
+        // Update cur position on the screen
         if (e.be.lines.size > 0) {
-            size_t row = be_cursor_row(&e.be, e.be.cursor);
+            size_t row = be_cursor_row(&e.be, e.be.cur);
             Line_ line = e.be.lines.data[row];
-            size_t col = e.be.cursor - line.begin;
-            size_t line_size = line.end - line.begin;
+            size_t col = e.be.cur - line.home;
+            size_t line_size = line.end - line.home;
             scr.cur.actual_pos.y = row * FONT_SIZE;
             scr.cur.actual_pos.x = (e.mode != EM_BROWSING)
-                ? ftr_get_s_width_n(&ftr, &e.be.data.data[line.begin], col > line_size ? line_size : col)
-                : ftr_get_s_width_n(&ftr, &e.be.data.data[line.begin], line_size) / 2;
+                ? ftr_get_s_width_n(&ftr, &e.be.data.data[line.home], col > line_size ? line_size : col)
+                : ftr_get_s_width_n(&ftr, &e.be.data.data[line.home], line_size) / 2;
         }
         
         // Update Cursor
-        // if (e.be.cursor != scr.cur.last_pos) {
+        // if (e.be.cur != scr.cur.last_pos) {
         //     float last_width = 0;
         //     if (scr.cur.last_pos < e.be.data.size) {
         //         Line_ last_line = editor_get_line_at_(&e.be, scr.cur.last_pos);
-        //         size_t col = scr.cur.last_pos - last_line.begin;
-        //         last_width = ftr_get_s_width_n(&ftr, &e.be.data.data[last_line.begin], col);   
+        //         size_t col = scr.cur.last_pos - last_line.home;
+        //         last_width = ftr_get_s_width_n(&ftr, &e.be.data.data[last_line.home], col);   
         //     }
-        //     Line_ line = editor_get_line_at_(&e.be, e.be.cursor);
-        //     size_t cur = ftr_get_glyph_index_near(&ftr, &e.be.data.data[line.begin], last_width);
+        //     Line_ line = editor_get_line_at_(&e.be, e.be.cur);
+        //     size_t cur = ftr_get_glyph_index_near(&ftr, &e.be.data.data[line.home], last_width);
 
         //     cursor_move(&scr, cur);
         // }
