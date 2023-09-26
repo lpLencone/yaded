@@ -19,9 +19,9 @@
 typedef struct {
     size_t home;
     size_t end;
-} Line_;
+} Line;
 
-da_Type(Lines, Line_);
+da_Type(Lines, Line);
 
 typedef struct {
     String_Builder data;
@@ -39,7 +39,7 @@ Errno be_save(const Basic_Editor *be);
 Errno be_load_from_file(Basic_Editor *be, const char *filename);
 
 size_t be_cursor_row(const Basic_Editor *be, size_t cur);
-Line_ be_get_line(const Basic_Editor *be, size_t cur);
+Line be_get_line(const Basic_Editor *be, size_t cur);
 
 // TODO: move n
 size_t be_move_up(Basic_Editor *be, size_t cur);

@@ -31,7 +31,7 @@ Errno be_load_from_file(Basic_Editor *be, const char *filename)
 
 // Get
 
-Line_ be_get_line(const Basic_Editor *be, size_t cur)
+Line be_get_line(const Basic_Editor *be, size_t cur)
 {
     assert(cur < be->data.size);
     return be->lines.data[be_cursor_row(be, cur)];
@@ -41,7 +41,7 @@ size_t be_cursor_row(const Basic_Editor *be, size_t cur)
 {
     assert(be->lines.size > 0);
     for (size_t row = 0; row < be->lines.size; row++) {
-        Line_ line = be->lines.data[row];
+        Line line = be->lines.data[row];
         if (line.home <= cur && cur <= line.end) {
             return row;
         }
@@ -57,7 +57,7 @@ size_t be_move_up(Basic_Editor *be, size_t cur)
     size_t col = cur - be->lines.data[row].home;
 
     if (row > 0) {
-        Line_ next_line = be->lines.data[row - 1];
+        Line next_line = be->lines.data[row - 1];
         size_t next_line_size = next_line.end - next_line.home;
         if (col > next_line_size) col = next_line_size;
         cur = next_line.home + col;
@@ -70,7 +70,7 @@ size_t be_move_down(Basic_Editor *be, size_t cur)
     size_t row = be_cursor_row(be, cur);
     size_t col = cur - be->lines.data[row].home;
     if (row + 1 < be->lines.size) {
-        Line_ next_line = be->lines.data[row + 1];
+        Line next_line = be->lines.data[row + 1];
         size_t next_line_size = next_line.end - next_line.home;
         if (col > next_line_size) col = next_line_size;
         cur = next_line.home + col;
@@ -125,7 +125,7 @@ size_t be_move_rightw(Basic_Editor *be, size_t cur)
 
 size_t be_move_home(Basic_Editor *be, size_t cur)
 {
-    Line_ line = be_get_line(be, cur);
+    Line line = be_get_line(be, cur);
     cur = line.home;
     return cur;
 }
@@ -133,7 +133,7 @@ size_t be_move_home(Basic_Editor *be, size_t cur)
 size_t be_move_end(Basic_Editor *be, size_t cur)
 {
     size_t row = be_cursor_row(be, cur);
-    Line_ line = be->lines.data[row];
+    Line line = be->lines.data[row];
     cur = line.end;
     return cur;
 }
@@ -172,14 +172,14 @@ void be_delete_n_from(Basic_Editor *be, size_t n, size_t from)
 
 size_t be_insert_line_above(Basic_Editor *be, size_t cur)
 {
-    Line_ line = be_get_line(be, cur);
+    Line line = be_get_line(be, cur);
     be_insert_sn_at(be, "\n", 1, line.home);
     return line.home;
 }
 
 size_t be_insert_line_below(Basic_Editor *be, size_t cur)
 {
-    Line_ line = be_get_line(be, cur);
+    Line line = be_get_line(be, cur);
     return be_insert_sn_at(be, "\n", 1, line.end);
 }
 
@@ -188,7 +188,7 @@ size_t be_insert_line_below(Basic_Editor *be, size_t cur)
 static void be_recompute_lines(Basic_Editor *be)
 {
     be->lines.size = 0;
-    Line_ line;
+    Line line;
     line.home = 0;
     for (size_t i = 0; i < be->data.size; i++) {
         if (be->data.data[i] == '\n') {

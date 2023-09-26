@@ -306,7 +306,7 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
                 size_t row_end = be_cursor_row(&e->be, select_end);
 
                 for (size_t row = row_begin; row <= row_end; row++) {
-                    Line_ line = e->be.lines.data[row];
+                    Line line = e->be.lines.data[row];
 
                     float select_col_begin = 0;
                     if (row == row_begin) {
@@ -338,7 +338,7 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
         case EM_BROWSING: {
             size_t row = be_cursor_row(&e->be, e->be.cur);
 
-            Line_ line = e->be.lines.data[row];
+            Line line = e->be.lines.data[row];
             size_t line_size = line.end - line.home;
 
             scr->cur.actual_width = 
@@ -690,7 +690,7 @@ int main(void)
         // Update cur position on the screen
         if (e.be.lines.size > 0) {
             size_t row = be_cursor_row(&e.be, e.be.cur);
-            Line_ line = e.be.lines.data[row];
+            Line line = e.be.lines.data[row];
             size_t col = e.be.cur - line.home;
             size_t line_size = line.end - line.home;
             scr.cur.actual_pos.y = row * FONT_SIZE;
@@ -703,11 +703,11 @@ int main(void)
         // if (e.be.cur != scr.cur.last_pos) {
         //     float last_width = 0;
         //     if (scr.cur.last_pos < e.be.data.size) {
-        //         Line_ last_line = editor_get_line_at_(&e.be, scr.cur.last_pos);
+        //         Line last_line = editor_get_line_at_(&e.be, scr.cur.last_pos);
         //         size_t col = scr.cur.last_pos - last_line.home;
         //         last_width = ftr_get_s_width_n(&ftr, &e.be.data.data[last_line.home], col);   
         //     }
-        //     Line_ line = editor_get_line_at_(&e.be, e.be.cur);
+        //     Line line = editor_get_line_at_(&e.be, e.be.cur);
         //     size_t cur = ftr_get_glyph_index_near(&ftr, &e.be.data.data[line.home], last_width);
 
         //     cursor_move(&scr, cur);

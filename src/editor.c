@@ -385,7 +385,7 @@ size_t editor_edit(Editor *e, EditorKey key, size_t cur)
         // } break;
 
         case EK_TAB: {
-            Line_ line = be_get_line(&e->be, e->be.cur);
+            Line line = be_get_line(&e->be, e->be.cur);
             size_t col = e->be.cur - line.home;
             size_t tabstop = 4 - (col % 4);
             for (size_t i = 0; i < tabstop; i++) {
@@ -470,7 +470,7 @@ static void editor_browsing(Editor *e, EditorKey key)
         } break;
 
         case EK_RETURN: {
-            Line_ line = be_get_line(&e->be, e->be.cur);
+            Line line = be_get_line(&e->be, e->be.cur);
             editor_open(e, &e->be.data.data[line.home], line.end - line.home);
         } break;
 
@@ -479,7 +479,7 @@ static void editor_browsing(Editor *e, EditorKey key)
         } break;
 
         case EK_END: {
-            Line_ line = be_get_line(&e->be, e->be.data.size);
+            Line line = be_get_line(&e->be, e->be.data.size);
             e->be.cur = line.home;
         } break;    
 
