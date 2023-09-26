@@ -79,7 +79,7 @@ float ftr_get_s_width_n_pad(FreeType_Renderer *ftr, const char *s, size_t n, cha
     return width;
 }
 
-size_t ftr_get_glyph_index_near(FreeType_Renderer *ftr, const char *s, float width)
+size_t ftr_get_index_near(FreeType_Renderer *ftr, const char *s, float width)
 {
     size_t i;
     float last_width = 0;
@@ -96,7 +96,7 @@ size_t ftr_get_glyph_index_near(FreeType_Renderer *ftr, const char *s, float wid
     return i;
 }
 
-size_t ftr_get_glyph_index_near_pad(FreeType_Renderer *ftr, const char *s,
+size_t ftr_get_index_near_pad(FreeType_Renderer *ftr, const char *s,
                                      float width, char pad)
 {
     size_t i;

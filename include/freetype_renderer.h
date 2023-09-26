@@ -47,9 +47,9 @@ float ftr_get_s_width_n(FreeType_Renderer *ftr, const char *s, size_t n);
 float ftr_get_s_width_n_pad(
     FreeType_Renderer *ftr, const char *s, size_t n, char pad); 
 
-size_t ftr_get_glyph_index_near(
+size_t ftr_get_index_near(
     FreeType_Renderer *ftr, const char *s, float width);
-size_t ftr_get_glyph_index_near_pad(
+size_t ftr_get_index_near_pad(
     FreeType_Renderer *ftr, const char *s, float width, char pad);
 
 #endif // MEDO_FREETYPE_RENDERER_H_
