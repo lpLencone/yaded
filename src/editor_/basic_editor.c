@@ -10,32 +10,6 @@
 
 static void be_recompute_lines(Basic_Editor *be);
 
-void be_backspace(Basic_Editor *be)
-{
-    if (be->cur > be->data.size) {
-        be->cur = be->data.size;
-    }
-    if (be->cur == 0) return;
-    be->cur--;
-
-    da_remove_from(&be->data, be->cur);
-    be_recompute_lines(be);
-}
-
-void be_delete(Basic_Editor *be)
-{
-    if (be->cur >= be->data.size) return;
-    da_remove_from(&be->data, be->cur);
-    be_recompute_lines(be);
-}
-
-Errno be_save(const Basic_Editor *be)
-{
-    assert(be->filename.size > 0);
-    printf("Saving as %s...\n", be->filename.data);
-    return write_entire_file(be->filename.data, be->data.data, be->data.size);
-}
-
 Errno be_load_from_file(Basic_Editor *be, const char *filename)
 {
     printf("Loading %s\n", filename);
@@ -55,6 +29,14 @@ Errno be_load_from_file(Basic_Editor *be, const char *filename)
     return 0;
 }
 
+// Get
+
+Line_ be_get_line(const Basic_Editor *be, size_t cur)
+{
+    assert(cur < be->data.size);
+    return be->lines.data[be_cursor_row(be, cur)];
+}
+
 size_t be_cursor_row(const Basic_Editor *be, size_t cur)
 {
     assert(be->lines.size > 0);
@@ -66,6 +48,8 @@ size_t be_cursor_row(const Basic_Editor *be, size_t cur)
     }
     return be->lines.size - 1;
 }
+
+// Move
 
 size_t be_move_up(Basic_Editor *be, size_t cur)
 {
@@ -141,7 +125,7 @@ size_t be_move_rightw(Basic_Editor *be, size_t cur)
 
 size_t be_move_home(Basic_Editor *be, size_t cur)
 {
-    Line_ line = be_get_line_at_(be, cur);
+    Line_ line = be_get_line(be, cur);
     cur = line.home;
     return cur;
 }
@@ -154,26 +138,52 @@ size_t be_move_end(Basic_Editor *be, size_t cur)
     return cur;
 }
 
+// Manipulation
+
+size_t be_backspace(Basic_Editor *be)
+{
+    if (be->cur > 0) {
+        be_delete_n_from(be, 1, --be->cur);
+    }
+    return be->cur;
+}
+
+void be_delete(Basic_Editor *be)
+{
+    if (be->cur >= be->data.size) return;
+    be_delete_n_from(be, 1, be->cur);
+}
+
 size_t be_insert_sn_at(Basic_Editor *be, const char *s, size_t n, size_t at)
 {
     if (at > be->data.size) {
         at = be->data.size;
     }
-
     da_insert_n(&be->data, s, n, at);
-
     be_recompute_lines(be);
-
-    at += n;
-    return at;
+    return at + n;
 }
 
-size_t be_delete_sn_from(Basic_Editor *be, size_t n, size_t from)
+void be_delete_n_from(Basic_Editor *be, size_t n, size_t from)
 {
     da_remove_n_from(&be->data, n, from);
     be_recompute_lines(be);
-    return from - n;
 }
+
+size_t be_insert_line_above(Basic_Editor *be, size_t cur)
+{
+    Line_ line = be_get_line(be, cur);
+    be_insert_sn_at(be, "\n", 1, line.home);
+    return line.home;
+}
+
+size_t be_insert_line_below(Basic_Editor *be, size_t cur)
+{
+    Line_ line = be_get_line(be, cur);
+    return be_insert_sn_at(be, "\n", 1, line.end);
+}
+
+// Maintenance
 
 static void be_recompute_lines(Basic_Editor *be)
 {
@@ -190,10 +200,3 @@ static void be_recompute_lines(Basic_Editor *be)
     line.end = be->data.size;
     da_append(&be->lines, &line);
 }
-
-Line_ be_get_line_at_(const Basic_Editor *be, size_t cur)
-{
-    assert(cur < be->data.size);
-    return be->lines.data[be_cursor_row(be, cur)];
-}
-

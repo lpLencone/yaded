@@ -5,8 +5,6 @@
 
 #include <stddef.h>
 
-
-
 typedef enum {
     TOKEN_END = 0,
     TOKEN_INLINE_COMMENT,
@@ -26,7 +24,6 @@ typedef enum {
 typedef struct {
     Token_Kind kind;
     size_t len;
-    Vec2f pos;
 } Token;
 
 typedef struct {

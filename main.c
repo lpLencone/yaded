@@ -229,7 +229,7 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
     Vec2f pos = {0};
     float line_width = 0;
     float max_line_width = 0;
-    Lexer l = lexer_init(data, strlen(data), keywords);
+    Lexer l = lexer_init(data, e->be.data.size, keywords);
 
     Token token = {0};
     size_t last_i = 0;
@@ -355,15 +355,15 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
         } break;
 
         case EM_SEARCHING: {
-            const float search_width = (e->match.x != -1)
-                ? ftr_get_s_width_n(ftr, e->searchbuf, strlen(e->searchbuf))
-                : 0;
+            // const float search_width = (e->match.x != -1)
+            //     ? ftr_get_s_width_n(ftr, e->searchbuf, strlen(e->searchbuf))
+            //     : 0;
 
-            sr_solid_rect(
-                sr, vec2f(scr->cur.actual_pos.x, - (int) e->c.y * FONT_SIZE),
-                    vec2f(search_width, scr->cur.height),
-                    hex_to_vec4f(0xAAAAFF28)
-            );
+            // sr_solid_rect(
+            //     sr, vec2f(scr->cur.actual_pos.x, - (int) e->c.y * FONT_SIZE),
+            //         vec2f(search_width, scr->cur.height),
+            //         hex_to_vec4f(0xAAAAFF28)
+            // );
         } break;
 
         default:
@@ -586,8 +586,8 @@ int main(void)
                                 } else {
                                     editor_process_key(&e, EK_SEARCH_NEXT);
                                 }
-                                if (e.match.x >= 0) {
-                                    e.c = *(Vec2ui *) &e.match;
+                                if (e.match >= 0) {
+                                    // e.c = *(Vec2ui *) &e.match;
                                 }
                             } else {
                                 if (SDL_CTRL) {
@@ -621,37 +621,7 @@ int main(void)
 
                         case SDLK_a: {
                             if (SDL_CTRL) {
-                                if ((scr.state.last_key.sym != SDLK_a) ||
-                                    (scr.state.last_key.mod & KMOD_CTRL) == 0 ||
-                                    (scr.state.last_key.mod & KMOD_SHIFT) != 0)
-                                {
-                                    scr.state.ctrl_a_pressed = 0;
-                                }
-
-                                const char *s = editor_get_line(&e);
-                                if ((isspace(s[e.c.x]) || s[e.c.x] == '\0') &&
-                                    (scr.state.ctrl_a_pressed == 0)) 
-                                {
-                                    scr.state.ctrl_a_pressed++;
-                                    
-                                    if (strlen(s) == 0) {
-                                        scr.state.ctrl_a_pressed++;
-                                    }
-                                }
-
-                                switch (scr.state.ctrl_a_pressed) {
-                                    case 0: {
-                                        editor_process_key(&e, EK_SELECT_WORD);
-                                    } break;
-                                    case 1: {
-                                        editor_process_key(&e, EK_SELECT_LINE);
-                                    } break;
-                                    default: {
-                                        editor_process_key(&e, EK_SELECT_ALL);
-                                    }
-                                }
-                                scr.state.ctrl_a_pressed++;
-                                update_last_moved(&scr);
+                                editor_process_key(&e, EK_SELECT_ALL);
                             }
                         } break;
 
@@ -666,9 +636,9 @@ int main(void)
                         } break;
 
                         case SDLK_c: {
-                            if (SDL_CTRL && e.mode == EM_SELECTION) {
-                                scc(SDL_SetClipboardText(editor_retrieve_selection(&e)));
+                            if (SDL_CTRL) {
                                 editor_process_key(&e, EK_COPY);
+                                scc(SDL_SetClipboardText(e.clipboard));
                             }
                         } break;
 
@@ -689,8 +659,9 @@ int main(void)
 
                         case SDLK_x: {
                             if (SDL_CTRL && e.mode == EM_SELECTION) {
-                                SDL_SetClipboardText(editor_retrieve_selection(&e));
-                                editor_process_key(&e, EK_CUT);
+                                editor_process_key(&e, EK_COPY);
+                                scc(SDL_SetClipboardText(e.clipboard));
+                                editor_process_key(&e, EK_BACKSPACE);
                             }
                         } break;
 

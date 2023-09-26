@@ -38,9 +38,8 @@ Errno be_save_as(Basic_Editor *be, const char *filename);
 Errno be_save(const Basic_Editor *be);
 Errno be_load_from_file(Basic_Editor *be, const char *filename);
 
-void be_backspace(Basic_Editor *be);
-void be_delete(Basic_Editor *be);
 size_t be_cursor_row(const Basic_Editor *be, size_t cur);
+Line_ be_get_line(const Basic_Editor *be, size_t cur);
 
 // TODO: move n
 size_t be_move_up(Basic_Editor *be, size_t cur);
@@ -50,13 +49,16 @@ size_t be_move_end(Basic_Editor *be, size_t cur);
 size_t be_move_leftw(Basic_Editor *be, size_t cur);
 size_t be_move_rightw(Basic_Editor *be, size_t cur);
 
-Line_ be_get_line_at_(const Basic_Editor *be, size_t cur);
-
+// Manipulation
 #define be_insert_s(be, s) be_insert_sn(be, s, strlen(s))
 #define be_insert_sn(be, s, n) be_insert_sn_at(be, s, n, (be)->cur)
 #define be_insert_s_at(be, s, at) be_insert_sn_at(be, s, strlen(s), at)
+size_t be_backspace(Basic_Editor *be);
+void be_delete(Basic_Editor *be);
 size_t be_insert_sn_at(Basic_Editor *be, const char *s, size_t n, size_t at);
+void be_delete_n_from(Basic_Editor *be, size_t n, size_t from);
+size_t be_insert_line_above(Basic_Editor *be, size_t cur);
+size_t be_insert_line_below(Basic_Editor *be, size_t cur);
 
-size_t be_delete_sn_from(Basic_Editor *be, size_t n, size_t from);
 
 #endif // EDITOR_H_
