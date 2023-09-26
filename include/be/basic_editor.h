@@ -48,6 +48,8 @@ size_t be_move_home(Basic_Editor *be, size_t cur);
 size_t be_move_end(Basic_Editor *be, size_t cur);
 size_t be_move_leftw(Basic_Editor *be, size_t cur);
 size_t be_move_rightw(Basic_Editor *be, size_t cur);
+size_t be_move_next_paragraph(Basic_Editor *be, size_t cur);
+size_t be_move_prev_paragraph(Basic_Editor *be, size_t cur);
 
 // Manipulation
 #define be_insert_s(be, s) be_insert_sn(be, s, strlen(s))

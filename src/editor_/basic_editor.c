@@ -138,6 +138,30 @@ size_t be_move_end(Basic_Editor *be, size_t cur)
     return cur;
 }
 
+size_t be_move_next_paragraph(Basic_Editor *be, size_t cur)
+{
+    size_t row = 0;
+    Line line = {0};
+    do {
+        cur = be_move_down(be, cur);
+        row = be_cursor_row(be, cur);
+        line = be->lines.data[row];
+    } while (row < be->lines.size && line.home != line.end);
+    return cur;
+}
+
+size_t be_move_prev_paragraph(Basic_Editor *be, size_t cur)
+{
+    size_t row = 0;
+    Line line = {0};
+    do {
+        cur = be_move_up(be, cur);
+        row = be_cursor_row(be, cur);
+        line = be->lines.data[row];
+    } while (row > 0 && line.home != line.end);
+    return cur;
+}
+
 // Manipulation
 
 size_t be_backspace(Basic_Editor *be)

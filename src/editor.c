@@ -344,11 +344,11 @@ size_t editor_move(Editor *e, EditorKey key, size_t cur)
         } break;
 
         case EK_NEXT_PARAGRAPH: {
-            // TODO
+            cur = be_move_next_paragraph(&e->be, cur);
         } break;
         
         case EK_PREV_PARAGRAPH: {
-            // TODO
+            cur = be_move_prev_paragraph(&e->be, cur);
         } break;
 
         default:
@@ -446,10 +446,10 @@ static void editor_action(Editor *e, EditorKey key)
             e->be.cur = editor_write_at(e, e->clipboard, e->be.cur);
         } break;
 
-        // case EK_CUT: {
-        //     editor_selection_copy(e);
-        //     e->be.cur = editor_selection_delete(e, e->be.cur, e->select_cur);
-        // } break;
+        case EK_CUT: {
+            editor_selection_copy(e);
+            e->be.cur = editor_selection_delete(e);
+        } break;
 
         default:
             assert(0);
@@ -523,57 +523,45 @@ static size_t editor_select(Editor *e, EditorKey key, size_t cur)
             cur = editor_move(e, EK_LINE_END, cur);
         } break;
 
-        // case EK_SELECT_WORD: {
-        //     const char *s = editor_get_line(e);
+        case EK_SELECT_WORD: {
+            cur = editor_move(e, EK_RIGHTW, cur);
+            e->select_cur = editor_move(e, EK_LEFTW, cur);
+        } break;
 
-        //     if (isspace(s[pos.x]) || s[pos.x] == '\0') {
-        //         e->mode = EM_EDITING;
-        //         return pos;
-        //     }
-
-        //     while ((!isspace(s[pos.x]) && s[pos.x] != '\0') && pos.x > 0) {
-        //         pos = editor_move(e, EK_LEFT, pos);
-        //     }
-        //     if (isspace(s[pos.x])) {
-        //         pos = editor_move(e, EK_RIGHT, pos);
-        //     }
-        //     e->cs = pos;
-        //     pos = editor_move(e, EK_RIGHTW, pos);
-        // } break;
-
-        // case EK_SELECT_LINE: {
-        //     e->cs = vec2ui(0, pos.y);
-        //     pos = editor_move(e, EK_LINE_END, pos);
-        // } break;
+        case EK_SELECT_LINE: {
+            Line line = be_get_line(&e->be, e->be.cur);
+            e->select_cur = line.home;
+            cur = line.end;
+        } break;
 
         // case EK_SELECT_OUTER_BLOCK: {
-        //     if (pos.x == 0 && pos.y == 0) {
+        //     if (e->be.cur == 0) {
         //         e->mode = EM_EDITING;
-        //         return pos;
+        //         break;
         //     }
 
         //     const char *s = NULL;
             
         //     size_t stack_i = 0;
-        //     Vec2ui save_cursor = pos;
-        //     while (pos.x > 0 || pos.y > 0) { // will not find brackets here, even if there's any
-        //         pos = editor_move(e, EK_LEFT, pos);
+        //     Vec2ui save_cursor = cur;
+        //     while (cur.x > 0 || cur.y > 0) { // will not find brackets here, even if there's any
+        //         cur = editor_move(e, EK_LEFT, cur);
         //         s = editor_get_line(e);
-        //         if (*strchrnul("{[(", s[pos.x]) != '\0') {
+        //         if (*strchrnul("{[(", s[cur.x]) != '\0') {
         //             if (stack_i == 0) break;
         //             stack_i--;
         //         }
-        //         if (*strchrnul("}])", s[pos.x]) != '\0') {
+        //         if (*strchrnul("}])", s[cur.x]) != '\0') {
         //             stack_i++;
         //         }
         //     }
 
-        //     if (*strchrnul("{[(", s[pos.x]) != '\0') { // if found, find the corresponding closing bracket
-        //         e->cs = pos;
+        //     if (*strchrnul("{[(", s[cur.x]) != '\0') { // if found, find the corresponding closing bracket
+        //         e->cs = cur;
         //         find_scope_end(e);
-        //         pos = editor_move(e, EK_RIGHT, pos);
+        //         cur = editor_move(e, EK_RIGHT, cur);
         //     } else {
-        //         pos = save_cursor;
+        //         cur = save_cursor;
         //     }
         // } break;
 
@@ -619,6 +607,7 @@ static size_t editor_select(Editor *e, EditorKey key, size_t cur)
         } break;
         
         case EK_SELECT_ALL: {
+            e->select_cur = 0;
             cur = editor_move(e, EK_END, cur);
         } break;
 

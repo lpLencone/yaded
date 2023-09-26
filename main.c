@@ -621,7 +621,18 @@ int main(void)
 
                         case SDLK_a: {
                             if (SDL_CTRL) {
-                                editor_process_key(&e, EK_SELECT_ALL);
+                                if (e.mode != EM_SELECTION) {
+                                    scr.state.ctrl_a_pressed = 0;
+                                }
+
+                                if (scr.state.ctrl_a_pressed == 0) {
+                                    editor_process_key(&e, EK_SELECT_WORD);
+                                } else if (scr.state.ctrl_a_pressed == 1) {
+                                    editor_process_key(&e, EK_SELECT_LINE);
+                                } else {
+                                    editor_process_key(&e, EK_SELECT_ALL);
+                                }
+                                scr.state.ctrl_a_pressed++;
                             }
                         } break;
 
@@ -659,9 +670,8 @@ int main(void)
 
                         case SDLK_x: {
                             if (SDL_CTRL && e.mode == EM_SELECTION) {
-                                editor_process_key(&e, EK_COPY);
+                                editor_process_key(&e, EK_CUT);
                                 scc(SDL_SetClipboardText(e.clipboard));
-                                editor_process_key(&e, EK_BACKSPACE);
                             }
                         } break;
 
@@ -699,20 +709,6 @@ int main(void)
                 : ftr_get_s_width_n(&ftr, &e.be.data.data[line.home], line_size) / 2;
         }
         
-        // Update Cursor
-        // if (e.be.cur != scr.cur.last_pos) {
-        //     float last_width = 0;
-        //     if (scr.cur.last_pos < e.be.data.size) {
-        //         Line last_line = editor_get_line_at_(&e.be, scr.cur.last_pos);
-        //         size_t col = scr.cur.last_pos - last_line.home;
-        //         last_width = ftr_get_s_width_n(&ftr, &e.be.data.data[last_line.home], col);   
-        //     }
-        //     Line line = editor_get_line_at_(&e.be, e.be.cur);
-        //     size_t cur = ftr_get_glyph_index_near(&ftr, &e.be.data.data[line.home], last_width);
-
-        //     cursor_move(&scr, cur);
-        // }
-
         scr.cur.vel = vec2f_mul(
             vec2f_sub(scr.cur.render_pos, scr.cur.actual_pos),
             vec2fs(CUR_MOVE_VEL)
