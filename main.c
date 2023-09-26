@@ -615,7 +615,7 @@ int main(void)
 
                         case SDLK_o: {
                             if (SDL_CTRL) {
-                                editor_open(&e, "..", strlen(".."));
+                                editor_open(&e, (String_View) SV_STATIC(".."));
                             }
                         } break;
 

@@ -1,10 +1,10 @@
 #ifndef MEDO_EDITOR_H_
 #define MEDO_EDITOR_H_
 
+#include "sv.h"
 #include "ds/string_builder.h"
 #include "la.h"
 
-#define EDITOR_
 #include "be/basic_editor.h"
 
 typedef enum {
@@ -94,7 +94,7 @@ size_t editor_edit(Editor *e, EditorKey key, size_t cur);
 
 size_t editor_write_at(Editor *e, const char *s, size_t at);
 
-void editor_open(Editor *e, const char *path, size_t pathlen);
+void editor_open(Editor *e, String_View path);
 
 #endif // MEDO_EDITOR_H_
 

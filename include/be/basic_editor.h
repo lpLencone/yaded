@@ -26,12 +26,9 @@ da_Type(Lines, Line);
 typedef struct {
     String_Builder data;
     Lines lines;
-    String_Builder filename;
 
     bool selection;
     size_t cur;
-
-    String_Builder clipboard;
 } Basic_Editor;
 
 Errno be_save_as(Basic_Editor *be, const char *filename);
@@ -40,7 +37,6 @@ Errno be_load_from_file(Basic_Editor *be, const char *filename);
 
 size_t be_cursor_row(const Basic_Editor *be, size_t cur);
 Line be_get_line(const Basic_Editor *be, size_t cur);
-
 // TODO: move n
 size_t be_move_up(Basic_Editor *be, size_t cur);
 size_t be_move_down(Basic_Editor *be, size_t cur);

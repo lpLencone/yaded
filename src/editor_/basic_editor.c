@@ -12,19 +12,12 @@ static void be_recompute_lines(Basic_Editor *be);
 
 Errno be_load_from_file(Basic_Editor *be, const char *filename)
 {
-    printf("Loading %s\n", filename);
-
     be->data.size = 0;
     Errno err = read_entire_file(filename, &be->data);
     if (err != 0) return err;
 
     be->cur = 0;
-
     be_recompute_lines(be);
-
-    be->filename.size = 0;
-    sb_append_cstr(&be->filename, filename);
-    sb_append_null(&be->filename);
 
     return 0;
 }

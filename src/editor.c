@@ -34,7 +34,7 @@ static void editor_action(Editor *e, EditorKey key);
 static size_t editor_select(Editor *e, EditorKey key, size_t cur);
 #define editor_paste(e) editor_write(e, e->clipboard);
 
-static void update_pathname(Editor *e, const char *path, size_t pathlen);
+static void update_pathname(Editor *e, String_View path);
 
 static size_t editor_selection_delete(Editor *e);
 
@@ -49,10 +49,10 @@ Editor editor_init(void)
     char cwdbuf[256];
     getcwd(cwdbuf, sizeof(cwdbuf));
     sb_append_cstr(&e.pathname, cwdbuf);
-    sb_append_null(&e.pathname);
 
     e.be = (Basic_Editor) {0};
-    editor_open(&e, ".", 1);
+
+    editor_open(&e, (String_View) SV_STATIC("."));
 
     e.match = -1;
 
@@ -66,7 +66,7 @@ void editor_clear(Editor *e)
     e->be.data.size = 0;
 }
 
-static_assert(sizeof(Editor) == 224, "Editor structure has changed");
+static_assert(sizeof(Editor) == 176, "Editor structure has changed");
 
 void editor_process_key(Editor *e, EditorKey key)
 {
@@ -90,15 +90,12 @@ void editor_process_key(Editor *e, EditorKey key)
                 case EK_PREV_PARAGRAPH: {
                     if (e->mode == EM_SELECTION) {
                         e->mode = EM_EDITING;
-                    }
-
-                    if (e->mode == EM_SELECTION) {
                         if (((key == EK_UP   || key == EK_LEFT ) && e->be.cur > e->select_cur) ||
                             ((key == EK_DOWN || key == EK_RIGHT) && e->be.cur < e->select_cur))
                         {
-                            e->select_cur = e->be.cur;
-                            return;
+                            e->be.cur = e->select_cur;
                         }
+                        return;
                     }
 
                     e->be.cur = editor_move(e, key, e->be.cur);
@@ -153,10 +150,6 @@ void editor_process_key(Editor *e, EditorKey key)
                 case EK_SELECT_NEXT_PARAGRAPH:
                 case EK_SELECT_PREV_PARAGRAPH:
                 case EK_SELECT_ALL: {
-                    if (e->mode != EM_SELECTION) {
-                        e->select_cur = e->be.cur;
-                        e->mode = EM_SELECTION;
-                    }
                     e->be.cur = editor_select(e, key, e->be.cur);
                 } break;
 
@@ -471,7 +464,8 @@ static void editor_browsing(Editor *e, EditorKey key)
 
         case EK_RETURN: {
             Line line = be_get_line(&e->be, e->be.cur);
-            editor_open(e, &e->be.data.data[line.home], line.end - line.home);
+            String_View path = sv_from_parts(&e->be.data.data[line.home], line.end - line.home);
+            editor_open(e, path);
         } break;
 
         case EK_HOME: {
@@ -490,6 +484,10 @@ static void editor_browsing(Editor *e, EditorKey key)
 
 static size_t editor_select(Editor *e, EditorKey key, size_t cur)
 {
+    if (e->mode != EM_SELECTION) {
+        e->select_cur = e->be.cur;
+    }
+
     switch (key) {
         case EK_SELECT_LEFT: {
             cur = editor_move(e, EK_LEFT, cur);
@@ -534,36 +532,47 @@ static size_t editor_select(Editor *e, EditorKey key, size_t cur)
             cur = line.end;
         } break;
 
-        // case EK_SELECT_OUTER_BLOCK: {
-        //     if (e->be.cur == 0) {
-        //         e->mode = EM_EDITING;
-        //         break;
-        //     }
-
-        //     const char *s = NULL;
+        case EK_SELECT_OUTER_BLOCK: {
+            size_t start_cur = e->select_cur;
             
-        //     size_t stack_i = 0;
-        //     Vec2ui save_cursor = cur;
-        //     while (cur.x > 0 || cur.y > 0) { // will not find brackets here, even if there's any
-        //         cur = editor_move(e, EK_LEFT, cur);
-        //         s = editor_get_line(e);
-        //         if (*strchrnul("{[(", s[cur.x]) != '\0') {
-        //             if (stack_i == 0) break;
-        //             stack_i--;
-        //         }
-        //         if (*strchrnul("}])", s[cur.x]) != '\0') {
-        //             stack_i++;
-        //         }
-        //     }
+            size_t stack_count = 0;
+            while (start_cur > 0) {
+                start_cur = editor_move(e, EK_LEFT, start_cur);
+                if (strchr("{[(", e->be.data.data[start_cur]) != NULL) {
+                    if (stack_count == 0) break;
+                    stack_count--;
+                }
+                if (strchr("}])", e->be.data.data[start_cur]) != NULL) {
+                    stack_count++;
+                }
+            }
 
-        //     if (*strchrnul("{[(", s[cur.x]) != '\0') { // if found, find the corresponding closing bracket
-        //         e->cs = cur;
-        //         find_scope_end(e);
-        //         cur = editor_move(e, EK_RIGHT, cur);
-        //     } else {
-        //         cur = save_cursor;
-        //     }
-        // } break;
+            if (stack_count != 0) {
+                e->mode = EM_EDITING;
+                return cur;
+            }
+
+            size_t end_cur = cur;
+            while (end_cur < e->be.data.size) {
+                end_cur = editor_move(e, EK_RIGHT, end_cur);
+                if (strchr("}])", e->be.data.data[end_cur]) != NULL) {
+                    if (stack_count == 0) break;
+                    stack_count--;
+                }
+                if (strchr("{[(", e->be.data.data[end_cur]) != NULL) {
+                    stack_count++;
+                }
+            }
+
+            if (stack_count != 0) {
+                e->mode = EM_EDITING;
+                return cur;
+            }
+
+            end_cur = editor_move(e, EK_RIGHT, end_cur);
+            e->select_cur = start_cur;
+            cur = end_cur;
+        } break;
 
         // case EK_SELECT_NEXT_BLOCK: {
         //     const char *s = editor_get_line(e);
@@ -614,6 +623,7 @@ static size_t editor_select(Editor *e, EditorKey key, size_t cur)
         default:
             assert(0);
     }
+    e->mode = EM_SELECTION;
 
     return cur;
 }
@@ -622,11 +632,10 @@ static_assert(EK_COUNT == 52, "The number of editor keys has changed");
 
 /* File I/O */
 
-void editor_open(Editor *e, const char *path, size_t pathlen)
+void editor_open(Editor *e, String_View path)
 {
-    assert(path != NULL);
-
-    update_pathname(e, path, pathlen);
+    update_pathname(e, path);
+    sb_append_n(&e->pathname, "", 1);
 
     const char *pathname = e->pathname.data;
     errno = 0;
@@ -647,6 +656,7 @@ void editor_open(Editor *e, const char *path, size_t pathlen)
         open_file(e, pathname);
         e->mode = EM_EDITING;
     }
+    sb_remove_from(&e->pathname, e->pathname.size - 1);
 }
 
 static void save_file(const Editor *e)
@@ -711,49 +721,21 @@ static void open_dir(Editor *e, const char *dirname)
     da_end(&entries);
 }
 
-static int str_rindex_n(const char *s, size_t n, char c)
+static void update_pathname(Editor *e, String_View path)
 {
-    for (int i = n; i >= 0; i--) {
-        if (s[i] == c) {
-            return i;
-        }
-    }
-    return -1;
-}
+    assert(e->pathname.size > 0 && path.count > 0);
+    assert(sv_index_of(path, '/', NULL) == false && "Cannot handle composite path; TODO: Implement such feature with String_View");
 
-static void update_pathname(Editor *e, const char *path, size_t pathlen)
-{
-    assert(e->pathname.size > 0 && path != NULL);
-    assert(*strchrnul(path, '/') == '\0' && "Cannot handle composite path");
-
-    if (strncmp(path, ".", pathlen) == 0) {
+    if (strncmp(path.data, ".", path.count) == 0) {
         return;
     }
 
-    if (strcmp(path, "..") == 0) {
-        int index = str_rindex_n(e->pathname.data, e->pathname.size, '/');
-        if (index <= 0) index = 1;
+    if (strncmp(path.data, "..", path.count) == 0) {
+        int index = str_rindexc_from(e->pathname, '/', e->pathname.size - 1);
+        if (index <= 0) index = 1; // start from root '/' path
         e->pathname.size = index;
     } else {
-        sb_pop_null(&e->pathname);
         sb_append_cstr(&e->pathname, "/");
-        sb_append_n(&e->pathname, path, pathlen);
+        sb_append_n(&e->pathname, path.data, path.count);
     }
-    
-    sb_append_null(&e->pathname);
 }
-
-// static void find_scope_end(Editor *e)
-// {
-//     const char *s = editor_get_line(e);
-//     size_t slen = strlen(s);
-
-//     size_t scope = 1;
-//     while (scope > 0 && (e->c.x < slen || e->c.y + 1 < e->lines.length)) {
-//         e->be.cur = editor_move(e, EK_RIGHT, e->be.cur);
-//         s = editor_get_line(e);
-
-//         if      (*strchrnul("{[(", s[e->c.x]) != '\0') scope++;
-//         else if (*strchrnul("}])", s[e->c.x]) != '\0') scope--;
-//     }
-// }
