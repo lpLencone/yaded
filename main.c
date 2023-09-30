@@ -278,19 +278,8 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
     glUniform2f(sr->resolution, scr_width, scr_height);
 
     switch (e->mode) {
-        case EM_EDITING:
-        case EM_SELECTION: {
-            scr->cur.actual_width = CUR_INIT_WIDTH;
-            float CURSOR_BLINK_THRESHOLD = 0.5 * 3.14 / CUR_BLINK_VEL;
-            float t = (float) (SDL_GetTicks() - scr->cur.last_moved) / 1000.0f;
-            bool threshold = t > CURSOR_BLINK_THRESHOLD;
-            float blinking_state = (1 + sin(CUR_BLINK_VEL * t)) / 2;
-            Vec4f color = (threshold) ? vec4fs(blinking_state) : vec4fs(1.0f);
-
-            sr_solid_rect(
-                sr, vec2f(scr->cur.render_pos.x, -scr->cur.render_pos.y),
-                    vec2f(scr->cur.actual_width, scr->cur.height),
-                    color);
+        case EM_SELECTION:
+        case EM_SEARCHING: {
 
             // Render selection background
             if (e->mode == EM_SELECTION) {
@@ -332,7 +321,35 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
                             vec2f(select_render_width, scr->cur.height),
                             color);
                 }
+            } else if (e->mode == EM_SEARCHING) {
+                const float search_width = (e->match != -1)
+                    ? ftr_get_s_width_n(ftr, e->searchbuf, strlen(e->searchbuf))
+                    : 0;
+
+                size_t row = be_cursor_row(&e->be, e->be.cur);
+                sr_solid_rect(
+                    sr, vec2f(scr->cur.actual_pos.x, - (int) row * FONT_SIZE),
+                        vec2f(search_width, scr->cur.height),
+                        hex_to_vec4f(0xAAAAFF28)
+                );
             }
+
+            __attribute__((fallthrough));
+        }
+
+        case EM_EDITING: {
+            scr->cur.actual_width = CUR_INIT_WIDTH;
+            float CURSOR_BLINK_THRESHOLD = 0.5 * 3.14 / CUR_BLINK_VEL;
+            float t = (float) (SDL_GetTicks() - scr->cur.last_moved) / 1000.0f;
+            bool threshold = t > CURSOR_BLINK_THRESHOLD;
+            float blinking_state = (1 + sin(CUR_BLINK_VEL * t)) / 2;
+            Vec4f color = (threshold) ? vec4fs(blinking_state) : vec4fs(1.0f);
+
+            sr_solid_rect(
+                sr, vec2f(scr->cur.render_pos.x, -scr->cur.render_pos.y),
+                    vec2f(scr->cur.actual_width, scr->cur.height),
+                    color);
+
         } break;
 
         case EM_BROWSING: {
@@ -354,25 +371,11 @@ void renderer_draw(SDL_Window *window, Simple_Renderer *sr, FreeType_Renderer *f
             );
         } break;
 
-        case EM_SEARCHING: {
-            // const float search_width = (e->match.x != -1)
-            //     ? ftr_get_s_width_n(ftr, e->searchbuf, strlen(e->searchbuf))
-            //     : 0;
-
-            // sr_solid_rect(
-            //     sr, vec2f(scr->cur.actual_pos.x, - (int) e->c.y * FONT_SIZE),
-            //         vec2f(search_width, scr->cur.height),
-            //         hex_to_vec4f(0xAAAAFF28)
-            // );
-        } break;
-
         default:
             assert(0);
     }
 
     sr_flush(sr);
-
-
 
     // Update camera
     const float cam_x_start_limit = (max_line_width < 0.4f * scr_width / scr->cam.scale)
@@ -585,9 +588,6 @@ int main(void)
                                     editor_process_key(&e, EK_SEARCH_PREV);
                                 } else {
                                     editor_process_key(&e, EK_SEARCH_NEXT);
-                                }
-                                if (e.match >= 0) {
-                                    // e.c = *(Vec2ui *) &e.match;
                                 }
                             } else {
                                 if (SDL_CTRL) {

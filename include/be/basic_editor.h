@@ -10,6 +10,7 @@
 #endif
 
 #include "ds/dynamic_array.h"
+#include "ds/string_builder.h"
 #include "be/common.h"
 #include "simple_renderer.h"
 
@@ -31,9 +32,8 @@ typedef struct {
     size_t cur;
 } Basic_Editor;
 
-Errno be_save_as(Basic_Editor *be, const char *filename);
-Errno be_save(const Basic_Editor *be);
-Errno be_load_from_file(Basic_Editor *be, const char *filename);
+void be_load_from_file(Basic_Editor *be, const char *filename);
+void be_destroy(Basic_Editor *be);
 
 size_t be_cursor_row(const Basic_Editor *be, size_t cur);
 Line be_get_line(const Basic_Editor *be, size_t cur);

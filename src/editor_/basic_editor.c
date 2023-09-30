@@ -10,16 +10,20 @@
 
 static void be_recompute_lines(Basic_Editor *be);
 
-Errno be_load_from_file(Basic_Editor *be, const char *filename)
+void be_load_from_file(Basic_Editor *be, const char *filename)
 {
-    be->data.size = 0;
-    Errno err = read_entire_file(filename, &be->data);
-    if (err != 0) return err;
-
+    char *data = read_entire_file(filename);
+    be->data.data = data;
+    be->data.size = strlen(data);
+    be->data.capacity = be->data.size;
     be->cur = 0;
     be_recompute_lines(be);
+}
 
-    return 0;
+void be_destroy(Basic_Editor *be)
+{
+    da_end(&be->lines);
+    sb_end(&be->data);
 }
 
 // Get
@@ -217,3 +221,4 @@ static void be_recompute_lines(Basic_Editor *be)
     line.end = be->data.size;
     da_append(&be->lines, &line);
 }
+

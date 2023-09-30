@@ -38,6 +38,12 @@ static void update_pathname(Editor *e, String_View path);
 
 static size_t editor_selection_delete(Editor *e);
 
+// Search operations
+static void editor_search_start(Editor *e);
+static int editor_search_next(Editor *e, size_t cur);
+static int editor_search_prev(Editor *e, size_t cur);
+
+
 Editor editor_init(void)
 {
     Editor e = {0};
@@ -181,56 +187,50 @@ void editor_process_key(Editor *e, EditorKey key)
         } break;
 
         case EM_SEARCHING: {
-        //     switch (key) {
-        //         case EK_ESC: {
-        //             e->mode = EM_EDITING;
-        //             if (e->match.x != -1) {
-        //                 size_t searchlen = strlen(e->searchbuf);
-        //                 e->c.x += searchlen;
-        //                 e->cs = e->c;
-        //                 for (size_t i = searchlen; i > 0; i--) {
-        //                     e->select_cur = editor_move(e, EK_LEFT, e->select_cur);
-        //                 }
-        //                 e->mode = EM_SELECTION;
-        //             }
-        //         } break;
+            switch (key) {
+                case EK_ESC: {
+                    e->mode = EM_EDITING;
+                    if (e->match != -1) {
+                        size_t searchlen = strlen(e->searchbuf);
+                        e->be.cur += searchlen;
+                        e->select_cur = e->be.cur;
+                        for (size_t i = searchlen; i > 0; i--) {
+                            e->select_cur = editor_move(e, EK_LEFT, e->select_cur);
+                        }
+                        e->mode = EM_SELECTION;
+                    }
+                } break;
 
-        //         case EK_SEARCH_NEXT: {
-        //             Vec2ui pos = editor_move(e, EK_RIGHT, e->c);
-        //             e->match = editor_search_next(e, pos);
-        //             if (e->match.x != -1) {
-        //                 e->c = vec2ui(e->match.x, e->match.y);
-        //             }
-        //         } break;
+                case EK_SEARCH_NEXT: {
+                    size_t cur = editor_move(e, EK_RIGHT, e->be.cur);
+                    e->match = editor_search_next(e, cur);
+                    if (e->match != -1) {
+                        e->be.cur = e->match;
+                    }
+                } break;
 
-        //         case EK_SEARCH_PREV: {
-        //             Vec2ui pos = {0};
-        //             if (e->c.x == 0 && e->c.y == 0) {
-        //                 pos.y = e->lines.length - 1;
-        //                 pos.x = strlen(editor_get_line_at(e, pos.y));
-        //             } else {
-        //                 pos = editor_move(e, EK_LEFT, e->c);
-        //             }
-        //             e->match = editor_search_prev(e, pos);
-        //             if (e->match.x != -1) {
-        //                 e->c = vec2ui(e->match.x, e->match.y);
-        //             }
-        //         } break;
+                case EK_SEARCH_PREV: {
+                    size_t cur = editor_move(e, EK_LEFT, e->be.cur);
+                    e->match = editor_search_prev(e, cur);
+                    if (e->match != -1) {
+                        e->be.cur = e->match;
+                    }
+                } break;
                 
-        //         case EK_BACKSPACE: {
-        //             size_t searchlen = strlen(e->searchbuf);
-        //             if (searchlen > 0) {
-        //                 e->searchbuf[searchlen - 1] = '\0';
-        //             }
-        //             e->match = editor_search_next(e, e->c);
-        //             if (e->match.x != -1) {
-        //                 e->c = vec2ui(e->match.x, e->match.y);
-        //             }
-        //         }
+                case EK_BACKSPACE: {
+                    size_t searchlen = strlen(e->searchbuf);
+                    if (searchlen > 0) {
+                        e->searchbuf[searchlen - 1] = '\0';
+                    }
+                    e->match = editor_search_next(e, e->be.cur);
+                    if (e->match != -1) {
+                        e->be.cur = e->match;
+                    }
+                }
 
-        //         default:
-        //             break;
-        //     }
+                default:
+                    break;
+            }
         } break;
     }
 }
@@ -244,7 +244,14 @@ size_t editor_write_at(Editor *e, const char *s, size_t at)
     }
 
     if (e->mode == EM_SEARCHING) {
-        // TODO
+        size_t searchlen = strlen(e->searchbuf);
+        assert(searchlen + strlen(s) < 64);
+        strcpy(&e->searchbuf[searchlen], s);
+        e->match = editor_search_next(e, e->be.cur);
+        if (e->match != -1) {
+            at = e->match;
+        }
+        return at;
     }
 
     if (e->mode == EM_SELECTION) {
@@ -425,11 +432,11 @@ static void editor_action(Editor *e, EditorKey key)
             save_file(e);
         } break;
 
-        // case EK_SEARCH_START: {
-        //     if (e->mode != EM_SEARCHING) {
-        //         editor_search_start(e);
-        //     }
-        // } break;
+        case EK_SEARCH_START: {
+            if (e->mode != EM_SEARCHING) {
+                editor_search_start(e);
+            }
+        } break;
 
         case EK_COPY: {
             editor_selection_copy(e);
@@ -627,6 +634,49 @@ static size_t editor_select(Editor *e, EditorKey key, size_t cur)
 
     return cur;
 }
+
+static void editor_search_start(Editor *e)
+{
+    e->searchbuf[0] = '\0';
+    e->mode = EM_SEARCHING;
+}
+
+static int editor_search_next(Editor *e, size_t cur)
+{
+    size_t i;
+    for (i = cur; i < e->be.data.size; i++) {
+        if (strncmp(e->searchbuf, &e->be.data.data[i], strlen(e->searchbuf)) == 0) {
+            return i;
+        }
+    }
+
+    for (i = 0; i < cur; i++) {
+        if (strncmp(e->searchbuf, &e->be.data.data[i], strlen(e->searchbuf)) == 0) {
+            return i;
+        }   
+    }
+    
+    return -1;
+}
+
+static int editor_search_prev(Editor *e, size_t cur)
+{
+    int i;
+    for (i = cur; i >= 0; i--) {
+        if (strncmp(e->searchbuf, &e->be.data.data[i], strlen(e->searchbuf)) == 0) {
+            return i;
+        }
+    }
+
+    for (i = (int) e->be.data.size - 1; i > (int) cur; i--) {
+        if (strncmp(e->searchbuf, &e->be.data.data[i], strlen(e->searchbuf)) == 0) {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
 
 static_assert(EK_COUNT == 52, "The number of editor keys has changed");
 

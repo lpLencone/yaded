@@ -71,9 +71,9 @@ typedef enum {
 } EditorMode;
 
 typedef struct {
-    size_t select_cur;
-
     Basic_Editor be;
+
+    size_t select_cur;
 
     char *clipboard;
 
